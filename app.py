@@ -9,6 +9,8 @@ import streamlit as st
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
+if not (DATA / "metrics_year.csv").exists() and (ROOT / "metrics_year.csv").exists():
+    DATA = ROOT          # files were uploaded loose in the repo root instead of data/
 sys.path.insert(0, str(ROOT / "src"))
 import memo as M
 from forensic_engine import WEIGHTS, BENF, mad_label
@@ -28,6 +30,13 @@ def style(fig, h=380):
     fig.update_xaxes(gridcolor=GRID, zeroline=False, linecolor=GRID)
     fig.update_yaxes(gridcolor=GRID, zeroline=False, linecolor=GRID)
     return fig
+
+
+if not (DATA / "metrics_year.csv").exists():
+    st.error("Data files not found. Upload the `data` folder (with metrics_year.csv etc.) to the repo.")
+    st.write("Files in repo root:", sorted(p.name for p in ROOT.iterdir()))
+    st.write("Files in data/:", sorted(p.name for p in (ROOT / "data").iterdir()) if (ROOT / "data").exists() else "folder missing")
+    st.stop()
 
 
 @st.cache_data

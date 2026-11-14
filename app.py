@@ -52,13 +52,29 @@ def stamp():
 
 # ------------------------------------------------------------------------------------------ sidebar
 st.sidebar.title("🔍 Filters")
-if not str(ROOT).startswith("/mount") and st.sidebar.button("⟳ Refresh live data (Yahoo + NSE)", help="Re-downloads statements and recomputes every score (~3 min)"):
-    with st.spinner("Downloading statements and recomputing scores..."):
-        for s in ["src/fetch_data.py", "src/forensic_engine.py"]:
-            r = subprocess.run([sys.executable, str(ROOT / s)], capture_output=True, text=True)
-            if r.returncode: st.sidebar.error(r.stderr[-400:]); break
-    st.cache_data.clear(); st.rerun()
-st.sidebar.caption(f"Data last refreshed: {stamp()} (hosted copy: refresh runs locally)" if str(ROOT).startswith("/mount") else f"Data last refreshed: {stamp()}")
+import os, datetime as dt
+COOLDOWN_MIN = 30
+
+
+def minutes_since_refresh():
+    try: return (dt.datetime.now() - dt.datetime.fromisoformat((DATA / "last_refresh.txt").read_text().strip())).total_seconds() / 60
+    except Exception: return 1e9
+
+
+age = minutes_since_refresh()
+if st.sidebar.button("⟳ Refresh live data (Yahoo + NSE)", disabled=age < COOLDOWN_MIN,
+                     help="Re-downloads statements from NSE / Yahoo Finance and rescores every firm (about 3 minutes)."):
+    env = {**os.environ, "WAI_DATA": str(DATA)}
+    ok = True
+    with st.spinner("Downloading statements and recomputing scores (about 3 minutes)..."):
+        for s_ in ["src/fetch_data.py", "src/forensic_engine.py"]:
+            r = subprocess.run([sys.executable, str(ROOT / s_)], capture_output=True, text=True, env=env, timeout=900)
+            if r.returncode:
+                ok = False; st.sidebar.error("Refresh failed (Yahoo Finance may be blocking this server). Showing the previous data. " + r.stderr[-200:] + r.stdout[-200:]); break
+    if ok:
+        st.cache_data.clear(); st.rerun()
+st.sidebar.caption(f"Data last refreshed: {stamp()}")
+if age < COOLDOWN_MIN: st.sidebar.caption(f"Data is only {age:.0f} min old; refresh unlocks after {COOLDOWN_MIN} min.")
 
 mall, bdig, valid = load(stamp())
 mall = mall.copy()

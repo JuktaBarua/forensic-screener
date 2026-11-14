@@ -26,6 +26,7 @@ TIER_ICON = {"Low": "🟢", "Moderate": "🟡", "Elevated": "🟠", "High": "�
 COH_COL = {"Nifty 50": BLUE, "Watchlist": ORANGE}
 INK, MUTED, GRID = "#1f2937", "#6b7280", "#e5e7eb"
 TIERS = ["Low", "Moderate", "Elevated", "High"]
+PCFG = {"displayModeBar": False}
 
 st.markdown("""<style>
 .block-container{padding-top:1.1rem;max-width:1280px}
@@ -47,6 +48,9 @@ st.markdown("""<style>
 .verdict .big{font-size:18px;font-weight:700;margin-bottom:4px}
 div[data-testid="stMetric"]{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;box-shadow:0 1px 3px rgba(16,24,40,.06)}
 div[data-testid="stMetric"] *{color:#1f2937}
+div[data-testid="stMetricValue"]{font-size:1.55rem}
+div[data-testid="stMetric"] [data-testid="stMarkdownContainer"], div[data-testid="stMetric"] p, div[data-testid="stMetric"] label,
+div[data-testid="stMetricLabel"] *, div[data-testid="stMetricValue"] *, div[data-testid="stMetricDelta"] *{white-space:normal !important;overflow:visible !important;text-overflow:clip !important;overflow-wrap:anywhere;line-height:1.25}
 .stTabs [data-baseweb="tab-list"]{gap:4px;border-bottom:1px solid #e5e7eb}
 .stTabs [data-baseweb="tab"]{font-weight:600;padding:8px 14px}
 h2,h3{color:#1f3a6e}
@@ -58,7 +62,7 @@ h2,h3{color:#1f3a6e}
 
 def style(fig, h=380):
     fig.update_layout(height=h, margin=dict(l=10, r=10, t=44, b=10), plot_bgcolor="white", paper_bgcolor="white",
-                      font=dict(color=INK, size=12), legend=dict(orientation="h", y=-0.2), title_font=dict(size=14, color=NAVY))
+                      font=dict(color=INK, size=12), legend=dict(orientation="h", y=-0.2), title_font=dict(size=14, color=NAVY), hoverlabel=dict(namelength=-1))
     fig.update_xaxes(gridcolor=GRID, zeroline=False, linecolor=GRID)
     fig.update_yaxes(gridcolor=GRID, zeroline=False, linecolor=GRID)
     return fig
@@ -222,7 +226,7 @@ with t0:
         "3. **⚖️ Peer comparison**: keep the default firms (Zee, Coffee Day, Reliance Infra, TCS) and switch the metric to *Beneish M-score* or *CFO / Net income*.\n"
         "4. **🤖 AI analyst memo**: pick PC Jeweller and flip between *Rule-based* and *Claude-drafted*. Open *Fact sheet* to see exactly which numbers the AI was allowed to use.\n"
         "5. **Sidebar what-if**: open *Adjust model weights*, set *Distress* to 0, and watch the ranking change. This shows the score is a judgement, not a law of nature.\n"
-        "6. **🧪 Back-test & DiD**: start with the forensic back-test: do firms flagged for high accruals really see profits fall afterwards? Then try the event study with your own treated and control firms.\n"
+        "6. **🧪 Back-test & DiD**: start with the history test: do firms flagged for high accruals really see profits fall afterwards? Then try the event study with your own exposed and comparison firms.\n"
         "7. **📚 Case lab**: open *Café Coffee Day* or *Zee* to see how the screen performs on known cases, for example whether Zee's FY17-19 accruals really were high.\n"
         "8. **📘 Method & validation**: read the back-test and the data cross-check, including the limitations.\n"
         "9. **⟳ Refresh live data** (sidebar) re-downloads the latest statements from NSE and Yahoo Finance (about 3 minutes).")
@@ -241,7 +245,7 @@ with t0:
 | **REM** | Real earnings management: cutting discretionary spending or distorting cash flow to hit profit targets | high index |
 | **CFO / NI** | Operating cash flow divided by net income over 3 years | well below 1 (profit not turning into cash) |
 | **Benford's law** | In natural numbers, about 30% start with digit 1 and 4.6% with 9. Made-up numbers drift from this | MAD above 0.015 = non-conformity (weak signal by itself) |
-| **DiD / triple DiD** | (Forensic use: does a red flag predict later trouble, or did a rule change earnings quality?) Compares the change in an exposed (treated) group with the change in a comparable unexposed (control) group; triple DiD adds a second split | Result only credible if pre-event trends were parallel (check the placebo) |
+| **DiD / triple DiD** | (Forensic use: does a red flag predict later trouble, or did a rule change earnings quality?) Compares the change in an exposed group with the change in a similar, unexposed comparison group; triple DiD adds a second split | Result only credible if pre-event trends were parallel (check the placebo) |
 | **Altman Z″** | Bankruptcy-risk score (emerging-market version) | below 4.15 = distress, which raises the incentive to manipulate |
 """)
     callout("<b>Important:</b> this is a screening tool for triage, not a verdict engine. Flags can have innocent explanations (mergers, demergers, new accounting standards, one-off items). "
@@ -274,7 +278,7 @@ with t1:
                                customdata=np.c_[top.name, top.tier_w, top.cohort, top.MScore.round(2)],
                                hovertemplate="<b>%{customdata[0]}</b><br>Score %{x:.0f} (%{customdata[1]})<br>%{customdata[2]} · Beneish %{customdata[3]}<extra></extra>"))
         fig.update_layout(title="Composite forensic risk score", xaxis_title="Risk score (0–100)")
-        st.plotly_chart(style(fig, max(320, 22 * len(top) + 80)), width="stretch")
+        st.plotly_chart(style(fig, max(320, 22 * len(top) + 80)), width="stretch", config=PCFG)
         st.caption("**How to read:** longer bar = more red flags. Bar **fill** shows the risk tier (darker = higher). Bar **outline** shows the cohort (blue = Nifty 50, orange = Watchlist).")
 
         a, b = st.columns(2)
@@ -285,13 +289,13 @@ with t1:
         f2.add_hline(y=0.1, line_dash="dot", line_color=MUTED)
         f2.update_traces(marker=dict(size=10, line=dict(color="white", width=1.5)))
         f2.update_layout(title="Earnings-manipulation map")
-        a.plotly_chart(style(f2), width="stretch")
+        a.plotly_chart(style(f2), width="stretch", config=PCFG)
         a.caption("**How to read:** each dot is a company. **Upper right** = both Beneish and accruals look worrying (right of the dashed line = Beneish flags it; high up = profit not backed by cash).")
         cnt = scored.groupby(["tier_w", "cohort"], observed=False).size().reset_index(name="n")
         f3 = px.bar(cnt, x="tier_w", y="n", color="cohort", barmode="group", color_discrete_map=COH_COL,
                     category_orders={"tier_w": TIERS}, labels={"tier_w": "Risk tier", "n": "Companies", "cohort": "Cohort"})
         f3.update_layout(title="How many companies in each tier")
-        b.plotly_chart(style(f3), width="stretch")
+        b.plotly_chart(style(f3), width="stretch", config=PCFG)
         b.caption("**How to read:** if the model works, the orange Watchlist bars should lean towards the higher tiers.")
 
     section("Screening table", "Sortable (click a column header). The progress bar shows the risk score.")
@@ -351,14 +355,14 @@ with t2:
             f.add_bar(name="Peer median", x=comps, y=med.values, marker_color="#cbd5e1")
             f.add_hline(y=1, line_dash="dot", line_color=MUTED, annotation_text="1.0 = no change")
             f.update_layout(title="Beneish indices vs peers", barmode="group")
-            a.plotly_chart(style(f), width="stretch")
+            a.plotly_chart(style(f), width="stretch", config=PCFG)
             a.caption("**How to read:** each bar is a year-on-year change. Above the dotted **1.0** line = deteriorating. Blue well above grey = this firm is worse than peers on that test (see Glossary in *Start here*).")
             f = go.Figure()
             usd = str(r.get("currency")) == "USD"; div, unit = (1e6, "USD million") if usd else (1e7, "₹ crore")
             f.add_bar(name="Net income", x=hist.fy, y=hist.ni / div, marker_color=BLUE)
             f.add_bar(name="Operating cash flow", x=hist.fy, y=hist.cfo / div, marker_color=ORANGE)
             f.update_layout(title=f"Profit vs cash ({unit})", barmode="group", xaxis=dict(dtick=1))
-            b.plotly_chart(style(f), width="stretch")
+            b.plotly_chart(style(f), width="stretch", config=PCFG)
             b.caption("**How to read:** healthy firms turn profit into cash, so the two bars are similar. A persistent gap (blue much taller than orange) is a classic red flag.")
 
             a, b = st.columns(2)
@@ -368,13 +372,13 @@ with t2:
                 f.add_bar(name="Observed", x=d_.digit, y=d_.observed * 100, marker_color=BLUE)
                 f.add_scatter(name="Benford expected", x=d_.digit, y=d_.expected * 100, mode="lines+markers", line=dict(color=INK, width=2))
                 f.update_layout(title="Benford first-digit test", xaxis=dict(dtick=1, title="Leading digit"), yaxis_title="% of numbers")
-                a.plotly_chart(style(f), width="stretch")
+                a.plotly_chart(style(f), width="stretch", config=PCFG)
                 a.caption("**How to read:** bars should follow the black line (about 30% of natural numbers start with 1). Big gaps hint at unnatural numbers, but this is a weak signal on its own.")
             comp_cols = {k: r["s_" + k] for k in WEIGHTS}
             f = go.Figure(go.Bar(y=list(comp_cols), x=[0 if pd.isna(v) else v for v in comp_cols.values()], orientation="h", marker_color=BLUE,
                                  text=["n/a" if pd.isna(v) else f"{v:.0f}" for v in comp_cols.values()], textposition="outside"))
             f.update_layout(title="What drives the score", xaxis=dict(range=[0, 110]), yaxis=dict(autorange="reversed"))
-            b.plotly_chart(style(f), width="stretch")
+            b.plotly_chart(style(f), width="stretch", config=PCFG)
             b.caption("**How to read:** the six building blocks, each 0 (benign) to 100 (worst). The score is their weighted average (weights are adjustable in the sidebar).")
 
             with st.expander("Ratios over time (DuPont, liquidity, leverage, quality)"):
@@ -402,7 +406,7 @@ with t3:
         f.add_bar(name=lab[t], x=h.fy, y=h[col], marker_color=palette[i])
     f.update_layout(title=f"{met} by fiscal year", barmode="group", xaxis=dict(dtick=1))
     if col == "MScore": f.add_hline(y=-1.78, line_dash="dash", line_color=MUTED, annotation_text="manipulator threshold")
-    st.plotly_chart(style(f, 420), width="stretch")
+    st.plotly_chart(style(f, 420), width="stretch", config=PCFG)
     st.caption("**How to read:** compare bars within a year to see who is better or worse, and across years to see the trend. For Beneish, Sloan, Jones, REM and Risk score, **higher = worse**. For Altman, CFO/NI and margins, **higher = healthier**.")
     if pick:
         st.dataframe(mall[mall.ticker.isin(pick)].pivot(index="name", columns="fy", values=col).round(3), width="stretch")
@@ -410,61 +414,78 @@ with t3:
 # ------------------------------------------------------------------------------------------ TAB: DiD LAB
 with tdid:
     section("Back-test & difference-in-differences", "Validate the red flags, and measure whether an event or rule changed earnings quality for exposed firms.")
-    callout("<b>What DiD can and cannot do for a forensic analyst.</b> It does <u>not</u> tell you whether one company cheated; that is the screener's job. DiD compares the change in an "
-            "<b>exposed</b> group with the change in a <b>comparable unexposed</b> group, so it answers two group-level questions: "
-            "<b>(1) Validation:</b> do red-flagged firms really do worse afterwards than unflagged ones? "
-            "<b>(2) Impact:</b> did a rule, enforcement action or shock change earnings quality for exposed firms? It is credible only if both groups were on <b>parallel trends</b> before the event.")
-    dbt, d2 = st.tabs(["1️⃣ Do red flags predict trouble? (forensic back-test)", "2️⃣ Event study (any event)"])
+    callout("<b>In plain English:</b> this tab uses history to answer two questions. <b>(1) Do the red flags actually work?</b> When a company is flagged, does its profitability really get worse afterwards? "
+            "<b>(2) Did a specific event matter?</b> For example, a rule change or a shock: did earnings quality change for the firms it hit? "
+            "Both compare a group of firms with a comparison group, before and after. That 'difference between two differences' is called <b>difference-in-differences (DiD)</b>. "
+            "It describes groups of firms; it does <u>not</u> tell you whether one company cheated.")
+    dbt, d2 = st.tabs(["1️⃣ Do the red flags work? (history test)", "2️⃣ Did an event matter? (event study)"])
 
     with dbt:
         if panel is None:
             callout("The 10-year Screener panel (data/screener_long.csv) is not available in this deployment.", "warn")
         else:
-            section("Do red flags predict trouble?", "A DiD-style test of the screener's own logic (Sloan, 1996): after a firm-year is flagged, does its outcome change differently from unflagged firms?")
-            callout("<b>The idea:</b> if high accruals or weak cash conversion really signal low-quality earnings, flagged firms should see profits <i>fall</i> and cash flow <i>catch up</i> in the following years, "
-                    "compared with unflagged firms in the same year. Each firm-year is an 'event'; the control group is every unflagged firm-year. Year effects are removed and standard errors are clustered by firm. "
-                    "Financial firms are excluded.")
+            section("Do the red flags actually work?", "A history test of the screener's own warning signs, using about 10 years of data.")
+            st.markdown(
+                "**The question.** If a company's profits look good but are not backed by cash (a red flag), does its profitability really get worse afterwards?\n\n"
+                "**How we test it, in three steps**\n"
+                "1. **Flag.** Every year, mark the companies that show the red flag (for example, the 20% with the highest accruals, i.e. profit least backed by cash).\n"
+                "2. **Follow.** Track each flagged company's profitability for the next 1 to 3 years.\n"
+                "3. **Compare.** Compare with companies that were *not* flagged in the same year. If flagged companies do clearly worse afterwards, the flag is a useful early warning.")
+            with st.expander("Plain-English glossary for this test"):
+                st.markdown("- **Accruals:** the part of profit that is *not* backed by cash. Large accruals mean profit is running ahead of cash.\n"
+                            "- **ROA (return on assets):** profit ÷ total assets. A simple measure of how profitable the business is.\n"
+                            "- **pp (percentage points):** a drop in ROA from 8% to 6.5% is 1.5 pp.\n"
+                            "- **Flag year:** the year a company is flagged. Year 0 on the chart.\n"
+                            "- **Why DiD?** We compare the *change* for flagged companies with the *change* for the others. Using changes removes effects that hit every company alike, such as a boom or recession.\n"
+                            "- **Clear / not clear:** whether the gap is big enough relative to normal ups and downs to trust (statisticians call this the t-value; about 2 or more is 'clear').")
             q1, q2 = st.columns(2)
-            fl = q1.selectbox("Red flag", list(A.FLAGS), key="bt_flag")
-            ocb = q2.selectbox("Outcome to track", ["Return on assets", "Net margin (profit / sales)", "Operating cash flow / sales"], key="bt_out")
+            fl = q1.selectbox("1. Which red flag?", list(A.FLAGS), key="bt_flag", help="High accruals = profit running ahead of cash. Weak cash conversion = operating cash flow below 60% of net income.")
+            ocb = q2.selectbox("2. What to track afterwards?", ["Return on assets", "Net margin (profit / sales)", "Operating cash flow / sales"], key="bt_out",
+                               help="For the first two, a working flag should be followed by a FALL. For operating cash flow, a working accrual flag is followed by a RISE as cash catches up with earlier profit.")
             colb = A.OUT[ocb][0]
             BT = A.flag_backtest(panel, A.FLAGS[fl], colb)
             if BT is None or not BT["stats"]:
                 callout("Not enough flagged firm-years for this combination.", "warn")
             else:
                 st1, st2 = BT["stats"].get(1), BT["stats"].get(2)
+                clarity = lambda t: "Clear difference" if abs(t) >= 2 else ("Suggestive" if abs(t) >= 1.5 else "Not clear")
+                short = {"Return on assets": "ROA", "Net margin (profit / sales)": "net margin", "Operating cash flow / sales": "cash flow margin"}[ocb]
                 k = st.columns(4)
                 if st1:
-                    k[0].metric("Effect after 1 year", f"{st1['beta'] * 100:+.2f} pp", f"t = {st1['beta'] / st1['se']:.1f}", delta_color="off", help="Flagged minus unflagged change in the outcome, same-year effects removed")
-                    k[1].metric("95% interval (1 yr)", f"{(st1['beta'] - 1.96 * st1['se']) * 100:+.1f} to {(st1['beta'] + 1.96 * st1['se']) * 100:+.1f}")
-                if st2: k[2].metric("Effect after 2 years", f"{st2['beta'] * 100:+.2f} pp", f"t = {st2['beta'] / st2['se']:.1f}", delta_color="off")
-                if st1: k[3].metric("Flagged firm-years", f"{st1['n_flag']}", f"{st1['firms']} different firms", delta_color="off")
+                    k[0].metric(f"Extra change in {short}, 1 year later", f"{st1['beta'] * 100:+.2f} pp", clarity(st1["beta"] / st1["se"]), delta_color="off",
+                                help="How much more (+) or less (-) the outcome moved for flagged companies than for unflagged ones, one year after the flag. "
+                                     f"Statistical t-value = {st1['beta'] / st1['se']:.1f}.")
+                    k[1].metric("Likely range (95%)", f"{(st1['beta'] - 1.96 * st1['se']) * 100:+.1f} to {(st1['beta'] + 1.96 * st1['se']) * 100:+.1f} pp", help="The true gap probably lies in this range. If it stays on one side of zero, the effect is clear.")
+                if st2: k[2].metric(f"Extra change, 2 years later", f"{st2['beta'] * 100:+.2f} pp", clarity(st2["beta"] / st2["se"]), delta_color="off")
+                if st1: k[3].metric("Flagged cases tested", f"{st1['n_flag']}", f"from {st1['firms']} companies", delta_color="off", help="Each case is one company in one year.")
                 cv = BT["curves"].copy(); cv["mean"] = cv["mean"] * 100
                 f = go.Figure()
-                for flg, nm, colr in [(True, "Flagged", ORANGE), (False, "Not flagged", BLUE)]:
+                for flg, nm, colr in [(True, "Flagged companies", ORANGE), (False, "Not flagged", BLUE)]:
                     z = cv[cv.flag == flg].sort_values("k")
                     f.add_scatter(x=z.k, y=z["mean"], mode="lines+markers", name=nm, line=dict(color=colr, width=3), marker=dict(size=9))
                 f.add_vline(x=0, line_dash="dot", line_color=MUTED, annotation_text="flag year", annotation_position="top left")
                 f.add_hline(y=0, line_color=GRID)
-                f.update_layout(title=f"{ocb}: change versus the flag year, by years since flag", xaxis=dict(dtick=1, title="Years relative to the flag year"), yaxis_title="Average change (pp)")
-                st.plotly_chart(style(f, 380), width="stretch")
-                st.caption("**How to read:** each line shows how the outcome moved relative to the flag year (0). If the orange line bends away from the blue line after year 0, flagged firms behave differently from others once flagged.")
+                f.update_layout(title=f"What happened to {short} before and after the flag", xaxis=dict(dtick=1, title="Years since the flag year (0 = the year of the flag)"),
+                                yaxis_title=f"Change in {short} vs flag year (pp)")
+                st.plotly_chart(style(f, 380), width="stretch", config=PCFG)
+                st.caption("**How to read:** the chart shows the average movement of each group relative to the flag year (0). If the orange line moves away from the blue line after year 0, "
+                           "flagged companies behaved differently from the rest once flagged.")
                 if st1:
                     tt = st1["beta"] / st1["se"]
                     expect_neg = colb in ("roa", "net_margin")
                     right = (st1["beta"] < 0) if expect_neg else (st1["beta"] > 0)
-                    word = "fell" if st1["beta"] < 0 else "rose"
-                    msg = (f"One year after being flagged, flagged firms' <b>{ocb.lower()}</b> {word} by <b>{abs(st1['beta']) * 100:.2f} pp more</b> than unflagged firms' (t = {tt:.1f}, "
-                           f"{st1['n_flag']} flagged firm-years from {st1['firms']} firms). ")
+                    direction = "lower" if st1["beta"] < 0 else "higher"
+                    msg = (f"<b>Result:</b> one year after being flagged, flagged companies' {short} ended up <b>{abs(st1['beta']) * 100:.2f} percentage points {direction}</b> "
+                           f"than that of unflagged companies ({st1['n_flag']} cases from {st1['firms']} companies). ")
                     if abs(tt) >= 2 and right:
-                        callout(msg + "This is the pattern a working red flag should produce: " + ("profits deteriorate after the flag." if expect_neg else "cash flow catches up as earlier accruals reverse."), "good")
+                        callout(msg + "<b>In other words:</b> " + ("the flag was a useful early warning: profitability tended to weaken afterwards." if expect_neg else "cash flow tended to catch up afterwards, as earlier accrual-driven profit reversed."), "good")
                     elif abs(tt) >= 2:
-                        callout(msg + "This is <b>opposite</b> to what a working red flag predicts, so treat this flag with caution.", "warn")
+                        callout(msg + "<b>In other words:</b> this is the <b>opposite</b> of what a working red flag predicts, so be cautious about relying on it.", "warn")
                     else:
-                        callout(msg + "The difference is <b>not statistically clear</b> in this sample.")
-            callout("<b>Read with care:</b> (1) the sample is a small, large-cap universe (Nifty 50 plus a watchlist); (2) flagged firms had often just peaked, so ordinary <i>mean reversion</i> can mimic part of the pattern; "
-                    "(3) overlapping firm-years and few firms limit precision; (4) this is evidence the flag is informative, not proof that any flagged firm manipulated earnings.", "warn")
-            callout("<b>So what for the analyst:</b> use accrual and cash-conversion flags as <i>early warnings of earnings that will not last</i>, which matters for credit, valuation and audit planning, then confirm with documents.", "good")
+                        callout(msg + "<b>In other words:</b> the gap is <b>not clear enough</b> to call this flag a reliable early warning in this sample.")
+            callout("<b>Read with care:</b> (1) the sample is small and large-cap (Nifty 50 plus a watchlist); (2) flagged companies had often just had an unusually good year, so some fall afterwards would happen anyway "
+                    "('mean reversion'); (3) this shows a flag is <i>informative</i>, not that any flagged company manipulated its numbers.", "warn")
+            callout("<b>So what for the analyst:</b> treat these flags as early warnings that reported earnings may not last. That matters for lending, valuation and audit planning. Then confirm with documents.", "good")
 
     with d2:
         if panel is None:
@@ -477,22 +498,22 @@ with tdid:
             PRESETS = {
                 "COVID-19 shock (event FY2021)": dict(
                     t=sec_t(["Consumer Cyclical", "Industrials"]), c=sec_t(["Technology", "Healthcare", "Consumer Defensive"]), out="Sales growth", ev=2021, pre=4, post=1,
-                    note="Treated: consumer-cyclical and industrial firms (autos, travel, retail, capital goods). Control: IT, pharma and staples that kept trading. FY2021 = year ended March 2021."),
+                    note="Exposed: consumer-cyclical and industrial firms (autos, travel, retail, capital goods). Comparison: IT, pharma and staples that kept trading. FY2021 = year ended March 2021."),
                 "Corporate tax cut, Sept 2019 (event FY2020)": dict(
                     t=sec_t(["Consumer Cyclical", "Consumer Defensive", "Industrials", "Utilities", "Basic Materials"]), c=sec_t(["Technology", "Healthcare"]), out="Net margin (profit / sales)", ev=2020, pre=4, post=1,
                     note="Tests whether domestic-facing firms gained relative to exporters. We only have sectors as a proxy for domestic revenue share, and many firms did not switch to the lower rate, so expect a weak signal."),
                 "Hindenburg report on the Adani group, Jan 2023 (event FY2024)": dict(
                     t=["ADANIENT.NS", "ADANIPORTS.NS"], c=[t for t in allnf if t not in ("ADANIENT.NS", "ADANIPORTS.NS")], out="Debt / assets", ev=2024, pre=4, post=3,
-                    note="Only two treated firms, so this is descriptive, not statistical. The allegations were contested; this tests nothing about wrongdoing, only whether financing ratios moved differently."),
-                "Custom (choose your own)": dict(t=[], c=allnf, out="Accruals / lagged assets", ev=2021, pre=4, post=2, note="<b>Forensic use:</b> choose firms hit by an event (an enforcement action, a rule change, a fraud disclosure in their sector) as treated, similar firms as control, and track <b>accruals</b> or <b>CFO / net income</b> to see whether earnings quality changed."),
+                    note="Only two exposed firms, so this is descriptive, not statistical. The allegations were contested; this tests nothing about wrongdoing, only whether financing ratios moved differently."),
+                "Custom (choose your own)": dict(t=[], c=allnf, out="Accruals / lagged assets", ev=2021, pre=4, post=2, note="<b>Forensic use:</b> choose firms hit by an event (an enforcement action, a rule change, a fraud disclosure in their sector) as exposed, similar firms as comparison, and track <b>accruals</b> or <b>CFO / net income</b> to see whether earnings quality changed."),
             }
             st.caption("The first three events are illustrations of the method. For forensic work, use *Custom* and track accruals or cash conversion.")
             pn = st.selectbox("Choose an event", list(PRESETS), key="ev_preset"); P0 = PRESETS[pn]; kk = str(abs(hash(pn)) % 10 ** 6)
             callout(P0["note"])
             lab_t = dict(zip(uni.ticker, uni.name)); fmt = lambda t: lab_t.get(t, t)
             g1, g2 = st.columns(2)
-            treated = g1.multiselect("Treated firms (exposed to the event)", list(nfu.ticker), default=P0["t"], format_func=fmt, key="ev_t" + kk)
-            control = g2.multiselect("Control firms (comparable, not exposed)", list(nfu.ticker), default=P0["c"], format_func=fmt, key="ev_c" + kk)
+            treated = g1.multiselect("Exposed firms (hit by the event)", list(nfu.ticker), default=P0["t"], format_func=fmt, key="ev_t" + kk)
+            control = g2.multiselect("Comparison firms (similar, not hit)", list(nfu.ticker), default=P0["c"], format_func=fmt, key="ev_c" + kk)
             o1, o2, o3, o4 = st.columns(4)
             outc = o1.selectbox("Outcome", list(A.OUT), index=list(A.OUT).index(P0["out"]), key="ev_o" + kk)
             ev = o2.slider("Event fiscal year", 2012, 2025, P0["ev"], key="ev_y" + kk, help="First fiscal year (ending March) affected by the event")
@@ -501,9 +522,9 @@ with tdid:
             col, unit = A.OUT[outc]; sc_ = 100 if unit == "pp" else 1; ul = "pp" if unit == "pp" else "×"
             overlap = set(treated) & set(control)
             if not treated or not control:
-                callout("Choose at least one treated and one control firm.", "warn")
+                callout("Choose at least one exposed and one comparison firm.", "warn")
             elif overlap:
-                callout("A firm cannot be both treated and control. Remove: " + ", ".join(fmt(t) for t in overlap), "warn")
+                callout("A firm cannot be both exposed and a comparison firm. Remove: " + ", ".join(fmt(t) for t in overlap), "warn")
             else:
                 R = A.did_estimate(panel, treated, control, col, ev, pre, post)
                 if R is None:
@@ -511,48 +532,48 @@ with tdid:
                 else:
                     est, se_ = R["est"] * sc_, R["se"] * sc_; plc = None if R["placebo"] is None else R["placebo"] * sc_
                     k = st.columns(5)
-                    k[0].metric("Treated: change", f"{R['d_t'] * sc_:+.2f} {ul}"); k[1].metric("Control: change", f"{R['d_c'] * sc_:+.2f} {ul}")
-                    k[2].metric("DiD estimate", f"{est:+.2f} {ul}", help="(treated after − before) − (control after − before)")
-                    k[3].metric("95% interval", f"{est - 1.96 * se_:+.1f} to {est + 1.96 * se_:+.1f}", help="Firm-clustered standard errors; unreliable with few treated firms")
+                    k[0].metric("Exposed firms: change", f"{R['d_t'] * sc_:+.2f} {ul}"); k[1].metric("Comparison firms: change", f"{R['d_c'] * sc_:+.2f} {ul}")
+                    k[2].metric("Event effect (DiD)", f"{est:+.2f} {ul}", help="(exposed firms after − before) − (comparison firms after − before)")
+                    k[3].metric("95% interval", f"{est - 1.96 * se_:+.1f} to {est + 1.96 * se_:+.1f}", help="Firm-clustered standard errors; unreliable with few exposed firms")
                     k[4].metric("Placebo (pre-event)", "n/a" if plc is None else f"{plc:+.2f} {ul}", help="DiD using only pre-event years with a fake event date. Should be near zero if trends were parallel.")
                     by = R["by_year"] * sc_
                     f = go.Figure()
                     f.add_vrect(x0=ev - 0.5, x1=by.index.max() + 0.5, fillcolor="#f1f6ff", opacity=0.9, line_width=0)
-                    f.add_scatter(x=by.index, y=by[1], mode="lines+markers", name=f"Treated (n={R['n_t']})", line=dict(color=BLUE, width=3), marker=dict(size=8))
-                    f.add_scatter(x=by.index, y=by[0], mode="lines+markers", name=f"Control (n={R['n_c']})", line=dict(color=ORANGE, width=3), marker=dict(size=8))
+                    f.add_scatter(x=by.index, y=by[1], mode="lines+markers", name=f"Exposed (n={R['n_t']})", line=dict(color=BLUE, width=3), marker=dict(size=8))
+                    f.add_scatter(x=by.index, y=by[0], mode="lines+markers", name=f"Comparison (n={R['n_c']})", line=dict(color=ORANGE, width=3), marker=dict(size=8))
                     prey = by[by.index < ev]; postx = by[by.index >= ev]
                     if len(prey) and len(postx):
                         cf = prey[1].mean() + (postx[0] - prey[0].mean())
-                        f.add_scatter(x=postx.index, y=cf, mode="lines", name="Treated if it had followed control", line=dict(color=BLUE, width=2, dash="dash"))
+                        f.add_scatter(x=postx.index, y=cf, mode="lines", name="Exposed if they had followed the comparison group", line=dict(color=BLUE, width=2, dash="dash"))
                     f.add_vline(x=ev - 0.5, line_dash="dot", line_color=MUTED, annotation_text=f"event: FY{ev}", annotation_position="top left")
                     f.update_layout(title=f"{outc}: average by fiscal year", xaxis=dict(dtick=1, title="Fiscal year (ending March)"), yaxis_title=f"{outc} ({ul})")
-                    st.plotly_chart(style(f, 400), width="stretch")
+                    st.plotly_chart(style(f, 400), width="stretch", config=PCFG)
                     st.caption("**How to read:** before the shaded area the two lines should move together (parallel trends). In the shaded area, the gap between the solid blue line and the dashed counterfactual is the DiD effect.")
                     # plain-English verdict
                     flags = []
-                    if R["n_t"] < 10: flags.append(f"only <b>{R['n_t']}</b> treated firms: treat the result as descriptive, not statistical")
+                    if R["n_t"] < 10: flags.append(f"only <b>{R['n_t']}</b> exposed firms: treat the result as descriptive, not statistical")
                     if plc is not None and abs(plc) >= 0.5 * abs(est): flags.append(f"the placebo gap ({plc:+.2f}) is as large as the estimate ({est:+.2f}), so <b>pre-event trends were not parallel</b> and the estimate is not credible")
                     elif plc is not None and abs(plc) >= 0.25 * abs(est): flags.append(f"the pre-event placebo gap ({plc:+.2f}) is {abs(plc) / abs(est):.0%} of the estimate, so <b>part of it may reflect trends that already differed before the event</b> (look at the chart before the shaded area)")
                     sig = (est - 1.96 * se_ > 0) or (est + 1.96 * se_ < 0)
-                    verdict = (f"After FY{ev}, treated firms' {outc.lower()} changed by <b>{R['d_t'] * sc_:+.2f} {ul}</b> versus <b>{R['d_c'] * sc_:+.2f} {ul}</b> for control firms, "
-                               f"so the DiD estimate is <b>{est:+.2f} {ul}</b>. ")
+                    verdict = (f"After FY{ev}, exposed firms' {outc.lower()} changed by <b>{R['d_t'] * sc_:+.2f} {ul}</b> versus <b>{R['d_c'] * sc_:+.2f} {ul}</b> for comparison firms, "
+                               f"so the event effect (DiD) is <b>{est:+.2f} {ul}</b>. ")
                     if flags: callout(verdict + "<b>Caution:</b> " + "; ".join(flags) + ".", "warn")
                     elif sig: callout(verdict + "The interval excludes zero and the placebo is small, so the data are <b>consistent with an effect</b> of the event (association, not proof of causation).", "good")
                     else: callout(verdict + "The interval includes zero, so the effect is <b>not distinguishable from noise</b> with this sample.")
 
-                    with st.expander("➕ Triple difference: which treated firms are most affected?"):
+                    with st.expander("➕ Triple difference: which exposed firms are most affected?"):
                         sp_ = st.radio("Split firms by", ["size", "leverage"], horizontal=True, key="ev_split" + kk, help="High = above the median of the pre-event average (total assets or debt/assets)")
                         T3 = A.triple_did(panel, treated, control, col, ev, pre, post, sp_)
                         if T3.get("DDD") is None:
-                            st.info("Not enough treated and control firms in both halves for a triple difference.")
+                            st.info("Not enough exposed and comparison firms in both halves for a triple difference.")
                         else:
                             kk3 = st.columns(3)
-                            kk3[0].metric(f"DiD, high {sp_}", f"{T3['High']['est'] * sc_:+.2f} {ul}", f"{T3['High']['n_t']} treated / {T3['High']['n_c']} control", delta_color="off")
-                            kk3[1].metric(f"DiD, low {sp_}", f"{T3['Low']['est'] * sc_:+.2f} {ul}", f"{T3['Low']['n_t']} treated / {T3['Low']['n_c']} control", delta_color="off")
+                            kk3[0].metric(f"DiD, high {sp_}", f"{T3['High']['est'] * sc_:+.2f} {ul}", f"{T3['High']['n_t']} exposed / {T3['High']['n_c']} comparison", delta_color="off")
+                            kk3[1].metric(f"DiD, low {sp_}", f"{T3['Low']['est'] * sc_:+.2f} {ul}", f"{T3['Low']['n_t']} exposed / {T3['Low']['n_c']} comparison", delta_color="off")
                             kk3[2].metric("Triple difference", f"{T3['DDD'] * sc_:+.2f} {ul}", help="DiD(high) − DiD(low)")
                             st.caption("Same logic as the calculator: the effect of the event is estimated separately for high and low groups, and the gap between them is the triple difference. Small groups make this very noisy.")
                     with st.expander("Firms included"):
-                        inc = R["data"].groupby("ticker").agg(group=("treat", lambda s: "Treated" if s.iloc[0] else "Control"), years=("fy", "count")).reset_index()
+                        inc = R["data"].groupby("ticker").agg(group=("treat", lambda s: "Exposed" if s.iloc[0] else "Comparison"), years=("fy", "count")).reset_index()
                         inc["Company"] = inc.ticker.map(fmt); st.dataframe(inc[["Company", "group", "years"]], hide_index=True, width="stretch")
             st.caption("Source: Screener.in public pages (Rs crore, consolidated where available), non-financial firms; ratios winsorised at 5th/95th percentile. DiD shows association under the parallel-trends assumption, not proof of cause.")
 
@@ -597,7 +618,7 @@ with tcase:
         f = go.Figure(); f.add_bar(name="Net income", x=pd_.fy, y=pd_.ni, marker_color=BLUE); f.add_bar(name="Operating cash flow", x=pd_.fy, y=pd_.cfo, marker_color=ORANGE)
         if mark: f.add_vrect(x0=mark[0] - 0.5, x1=mark[1] + 0.5, fillcolor="#fff6ec", opacity=0.9, line_width=0)
         f.update_layout(title="Profit vs operating cash flow (₹ crore)", barmode="group", xaxis=dict(dtick=1))
-        a.plotly_chart(style(f, 340), width="stretch")
+        a.plotly_chart(style(f, 340), width="stretch", config=PCFG)
         a.caption("**How to read:** shaded years = the period in the case. When blue towers over orange, profit is not turning into cash.")
         raw = panel[(panel.ticker == tk) & (panel.fy >= 2015)].sort_values("fy")
         f = go.Figure(); f.add_scatter(x=raw.fy, y=raw.accruals * 100, name="Accruals / lagged assets", mode="lines+markers", line=dict(color=BLUE, width=3))
@@ -605,7 +626,7 @@ with tcase:
         if mark: f.add_vrect(x0=mark[0] - 0.5, x1=mark[1] + 0.5, fillcolor="#fff6ec", opacity=0.9, line_width=0)
         f.add_hline(y=0, line_color=MUTED, line_dash="dot")
         f.update_layout(title="Accruals and leverage (% of assets)", xaxis=dict(dtick=1), yaxis_title="%")
-        b.plotly_chart(style(f, 340), width="stretch")
+        b.plotly_chart(style(f, 340), width="stretch", config=PCFG)
         b.caption("**How to read:** accruals well above 0 = profit not backed by cash. A rising orange line = debt building up relative to assets.")
 
     if C["kind"] == "tcs":
@@ -622,13 +643,13 @@ with tcase:
         comps = ["DSRI", "GMI", "AQI", "SGI", "DEPI", "SGAI", "LVGI"]
         f = go.Figure(); f.add_bar(name="TCS", x=comps, y=[tr[k] for k in comps], marker_color=BLUE); f.add_bar(name="Peer median (all non-financials)", x=comps, y=peers[comps].median().values, marker_color="#cbd5e1")
         f.add_hline(y=1, line_dash="dot", line_color=MUTED); f.update_layout(title="Beneish indices: TCS vs peers", barmode="group")
-        a.plotly_chart(style(f, 340), width="stretch")
+        a.plotly_chart(style(f, 340), width="stretch", config=PCFG)
         a.caption(f"**Reading:** M-score = **{tr.MScore:.2f}**, below the −2.22 watch level, so the model does not flag TCS. The only index noticeably above 1 is AQI; check whether acquisitions or leases explain it.")
         d_ = bdig[bdig.ticker == "TCS.NS"]
         f = go.Figure(); f.add_bar(name="Observed", x=d_.digit, y=d_.observed * 100, marker_color=BLUE)
         f.add_scatter(name="Benford expected", x=d_.digit, y=d_.expected * 100, mode="lines+markers", line=dict(color=INK, width=2))
         f.update_layout(title="Benford first-digit test: TCS", xaxis=dict(dtick=1, title="Leading digit"), yaxis_title="% of numbers")
-        b.plotly_chart(style(f, 340), width="stretch")
+        b.plotly_chart(style(f, 340), width="stretch", config=PCFG)
         b.caption(f"**Reading:** MAD = **{tr.benford_mad:.4f}** ({tr.benford_label}). With Yahoo's derived line items (totals repeated, rounded aggregates) this is more likely a data artefact than manipulation, which is why Benford carries only 10% weight.")
         callout("<b>Take-away for the answer:</b> TCS looks financially strong (high margins, cash-backed profit) and unremarkable on Beneish. The Benford miss is a weak signal that needs raw filing data before drawing any conclusion.", "good")
     elif C["kind"] == "text":
@@ -726,7 +747,7 @@ Tiers: **Low** below 35 · **Moderate** 35-50 · **Elevated** 50-65 · **High** 
     f = px.bar(v.sort_values("AUC"), x="AUC", y="metric", orientation="h", color_discrete_sequence=[BLUE], text="AUC", labels={"metric": ""})
     f.add_vline(x=0.5, line_dash="dash", line_color=MUTED, annotation_text="0.5 = coin-flip")
     f.update_layout(title="Back-test result by test", xaxis=dict(range=[0, 1]))
-    st.plotly_chart(style(f, 340), width="stretch")
+    st.plotly_chart(style(f, 340), width="stretch", config=PCFG)
     callout("<b>Honest reading:</b> the combined score beats a coin flip (about 0.65) but not by a lot, using only ~10 watchlist firms. Several watchlist episodes were distress or governance issues, "
             "not accounting manipulation. Treat the screen as a prioritisation aid, not a detector.", "warn")
     with st.expander("Back-test details"):

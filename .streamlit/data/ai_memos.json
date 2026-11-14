@@ -1,0 +1,50 @@
+{
+ "ZEEL.NS": {
+  "memo": "**Verdict:** Low risk (25/100). No major ratio screen fires; Beneish M is -2.47 and 3-year CFO/NI is 2.38.\n\n**Evidence**\n- Beneish M of -2.47 is below the -2.22 watch level; the highest index is SGAI at 1.56 (SG&A rising faster than sales), worth noting but not alarming.\n- Accruals are benign: Sloan ratio -0.031 (38th peer percentile), Jones DA -0.038 (17th).\n- Altman Z'' of 14.9 (Safe); Benford MAD 0.0104 is \"Acceptable\".\n\n**Benign explanations / caveat:** Zee's publicly discussed governance issues concerned related-party and cash-type matters from earlier years, outside this FY2022-26 window. A clean ratio screen here is therefore *not* evidence of clean governance.\n\n**Next steps:** (1) extend history to FY2018-21 using Screener's 10-year tables and filings; (2) read related-party and contingent-liability notes; (3) confirm bank balances and fixed deposits with counterparties.",
+  "model": "claude-sonnet-5-5",
+  "date": "2026-11-15",
+  "fy": 2026
+ },
+ "COFFEEDAY.NS": {
+  "memo": "**Verdict:** Moderate (45/100). The only strong signal is Benford non-conformity (MAD 0.0205); earnings-manipulation screens are quiet.\n\n**Evidence**\n- Beneish M -2.38 (below the -1.78 flag); DSRI 0.93 and LVGI 0.75 show no receivable build-up or rising leverage.\n- Sloan accrual ratio 0.007 sits at the 67th peer percentile; Jones DA -0.013 is near the middle.\n- Benford MAD 0.0205 exceeds the 0.015 non-conformity bar on 504 numbers; the 3-year CFO/NI ratio is unavailable (cumulative profit not positive).\n\n**Benign explanations:** the group's restructuring, asset sales and deleveraging after FY2020 change the shape of the statements; Benford can fail on small, rounded or derived balances.\n\n**Next steps:** (1) test for round-number and duplicate balances; (2) review related-party and inter-corporate loan notes; (3) examine the auditor's emphasis-of-matter paragraphs over FY2019-21 using older annual reports.",
+  "model": "claude-sonnet-5-5",
+  "date": "2026-11-15",
+  "fy": 2026
+ },
+ "RELINFRA.NS": {
+  "memo": "**Verdict:** Moderate (49/100), driven by distress rather than accounting-quality signals.\n\n**Evidence**\n- Altman Z'' is 2.12, in the Distress zone, which raises the incentive to window-dress.\n- Beneish M -2.71 is comfortably benign; DSRI 0.66 shows receivables shrinking relative to sales. GMI 1.33 flags a deteriorating gross margin.\n- Accruals are mid-range: Sloan 0.005 (65th percentile), Jones DA 0.019 (62nd); 3-year CFO/NI 1.65 is cash-backed; Benford \"Acceptable\" (MAD 0.0106).\n\n**Benign explanations:** asset disposals, EPC contract-accounting timing and arbitration receivables can distort ratios.\n\n**Next steps:** (1) examine inter-corporate deposits and loans to group entities; (2) test the recoverability of contract assets and arbitration awards; (3) review auditor qualifications and KAMs against the course's Reliance Infra red-flag list.",
+  "model": "claude-sonnet-5-5",
+  "date": "2026-11-15",
+  "fy": 2026
+ },
+ "TMPV.NS": {
+  "memo": "**Verdict:** High (79/100), but treat as a *probable structural false positive* until checked.\n\n**Evidence**\n- Sloan accrual ratio 0.182 and Jones DA 0.177 are both at the 96th peer percentile; Beneish TATA is 0.18 (very high).\n- Beneish M -1.56 is above the -1.78 flag, driven by TATA and AQI (1.19) rather than DSRI (1.04).\n- Yet 3-year CFO/NI is 1.02 and Benford is \"Acceptable\", so cash does not contradict reported profit.\n\n**Benign explanations to check first:** the entity appears to have been restructured (the ticker changed to TMPV), so year-on-year comparisons and the prior-year base may not be like-for-like; large non-cash items or exceptional gains inflate total accruals.\n\n**Next steps:** (1) obtain restated comparatives and the scheme-of-arrangement note; (2) strip exceptional items from net income and recompute accruals; (3) rerun the screen on pro-forma statements.",
+  "model": "claude-sonnet-5-5",
+  "date": "2026-11-15",
+  "fy": 2026
+ },
+ "PCJEWELLER.NS": {
+  "memo": "**Verdict:** High (73/100). Beneish M is -1.41, above the -1.78 threshold, and profits are not backed by cash.\n\n**Evidence**\n- Beneish M -1.41 with SGI 1.49 (rapid sales growth) and DSRI 1.21 (receivables growing faster than sales).\n- 3-year CFO/NI is -0.98: reported profit coexists with negative operating cash flow.\n- Sloan ratio 0.089 (88th percentile), Jones DA 0.074 (81st); Benford MAD 0.0199 (Non-conformity); DSO 69 days.\n\n**Benign explanations:** jewellery inventory builds and gold-metal loan accounting can depress CFO; a low-base recovery inflates SGI.\n\n**Next steps:** (1) reconcile inventory (gold stock) with physical verification and lender stock audits; (2) age the receivables and test subsequent collections; (3) review gold-loan and bank-confirmation balances.",
+  "model": "claude-sonnet-5-5",
+  "date": "2026-11-15",
+  "fy": 2026
+ },
+ "ADANIENT.NS": {
+  "memo": "**Verdict:** Elevated (64/100). Several moderate signals line up, none individually extreme.\n\n**Evidence**\n- Beneish M -1.97 is in the watch zone (-2.22 to -1.78); DSRI 1.27 and GMI 1.28 show receivables outgrowing sales and margins weakening.\n- Jones DA 0.092 is at the 85th peer percentile; Sloan 0.030 at the 77th; 3-year CFO/NI is 0.87, i.e. cash lags profit.\n- Altman Z'' 4.73 (Grey); Benford \"Acceptable\" (MAD 0.0087).\n\n**Benign explanations:** the group is a holding/incubator whose consolidated mix shifts as new businesses are consolidated, so indices are noisy.\n\n**Next steps:** (1) segment-level receivable and margin analysis; (2) trace related-party transactions and capital-work-in-progress ageing; (3) compare to peers in each segment, not the whole Nifty. Note: this is a ratio screen only and says nothing about allegations made outside the financial statements.",
+  "model": "claude-sonnet-5-5",
+  "date": "2026-11-15",
+  "fy": 2026
+ },
+ "TCS.NS": {
+  "memo": "**Verdict:** Moderate (42/100) - a useful *control* case showing a screen false positive.\n\n**Evidence**\n- Beneish M -2.36 and TATA -0.02 are benign; Sloan -0.017 (48th percentile); 3-year CFO/NI 1.01 shows profit fully cash-backed; Altman Z'' 11.7 (Safe).\n- The Moderate tier comes mainly from Benford MAD 0.0164 (Non-conformity on 503 numbers) and AQI 1.29.\n\n**Interpretation:** a Benford miss on derived Yahoo line items for a very large, tightly managed firm is more plausibly an artefact (duplicates, aggregates, rounding in source data) than manipulation. This is why Benford carries only 10% weight.\n\n**Next steps:** (1) rerun Benford on numbers taken directly from the annual report; (2) check the AQI jump for acquisition or lease effects.",
+  "model": "claude-sonnet-5-5",
+  "date": "2026-11-15",
+  "fy": 2026
+ },
+ "IDEA.NS": {
+  "memo": "**Verdict:** High (70/100), but this is a distress signal more than a manipulation signal.\n\n**Evidence**\n- Altman Z'' 0.57 (Distress); Jones DA 0.104 (88th percentile) and Sloan 0.078 (85th).\n- Beneish M -2.07 is only in the watch zone and its indices are near 1 (DSRI 0.97, SGI 1.03), so there is no sign of sales or receivable gaming.\n- Benford MAD 0.0167 (Non-conformity); 3-year CFO/NI unavailable because cumulative profit is not positive.\n\n**Benign explanations:** spectrum-licence amortisation, AGR-liability provisions and large non-cash items inflate accruals.\n\n**Next steps:** (1) separate licence amortisation and exceptional items from operating accruals; (2) examine going-concern disclosures and lender-covenant notes; (3) review deferred payment obligations to the government.",
+  "model": "claude-sonnet-5-5",
+  "date": "2026-11-15",
+  "fy": 2026
+ }
+}

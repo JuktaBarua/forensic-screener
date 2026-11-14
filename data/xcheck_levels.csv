@@ -1,0 +1,5 @@
+item,n,within_2pct,within_10pct,median_gap_pct
+Sales,174,63,84,1.3
+Net income,174,70,84,0.3
+Operating cash flow,168,97,99,0.0
+Total assets,174,97,99,0.0

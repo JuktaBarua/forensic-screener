@@ -1,5 +1,5 @@
 """
-DiD / event-study engine and 10-year Screener panel (sessions 15-16: DiD, triple DiD, panel data).
+DiD / event-study engine and 10-year Screener panel (difference-in-differences, triple DiD, panel data).
 
 Panel  : built from data/screener_long.csv (Screener.in public pages, Rs crore, 2009-2026)
 DiD    : (Treated_post - Treated_pre) - (Control_post - Control_pre)

@@ -1,0 +1,6 @@
+ratio,n,spearman,median_abs_diff
+SGI,46,1.0,0.001
+Accruals/TA,46,0.99,0.0
+CFO/NI,42,0.99,0.005
+Net margin,46,0.98,0.002
+Asset turnover,46,1.0,0.01

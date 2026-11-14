@@ -125,12 +125,15 @@ doc.add_heading("References (verify each before real submission)", 2)
 for ref in ["Altman, E. I. (1968). Financial ratios, discriminant analysis and the prediction of corporate bankruptcy. Journal of Finance, 23(4), 589-609.",
             "Altman, E. I., Hartzell, J., & Peck, M. (1995). Emerging markets corporate bonds: A scoring system. Salomon Brothers.",
             "Bao, Y., Ke, B., Li, B., Yu, Y. J., & Zhang, J. (2020). Detecting accounting fraud in publicly traded U.S. firms using a machine learning approach. Journal of Accounting Research, 58(1), 199-235.",
+            "Bertrand, M., Duflo, E., & Mullainathan, S. (2004). How much should we trust differences-in-differences estimates? Quarterly Journal of Economics, 119(1), 249-275.",
             "Beneish, M. D. (1999). The detection of earnings manipulation. Financial Analysts Journal, 55(5), 24-36.",
+            "Card, D., & Krueger, A. B. (1994). Minimum wages and employment: A case study of the fast-food industry in New Jersey and Pennsylvania. American Economic Review, 84(4), 772-793.",
             "Cressey, D. R. (1953). Other People's Money. Free Press.",
             "Dechow, P. M., Ge, W., Larson, C. R., & Sloan, R. G. (2011). Predicting material accounting misstatements. Contemporary Accounting Research, 28(1), 17-82.",
             "Dechow, P. M., Sloan, R. G., & Sweeney, A. P. (1995). Detecting earnings management. The Accounting Review, 70(2), 193-225.",
             "Dyck, A., Morse, A., & Zingales, L. (2010). Who blows the whistle on corporate fraud? Journal of Finance, 65(6), 2213-2253.",
             "Healy, P. M., & Wahlen, J. M. (1999). A review of the earnings management literature and its implications for standard setting. Accounting Horizons, 13(4), 365-383.",
+            "Imbens, G. W., & Lemieux, T. (2008). Regression discontinuity designs: A guide to practice. Journal of Econometrics, 142(2), 615-635.",
             "Nigrini, M. J. (2012). Benford's Law: Applications for Forensic Accounting, Auditing, and Fraud Detection. Wiley.",
             "Roychowdhury, S. (2006). Earnings management through real activities manipulation. Journal of Accounting and Economics, 42(3), 335-370.",
             "Sloan, R. G. (1996). Do stock prices fully reflect information in accruals and cash flows about future earnings? The Accounting Review, 71(3), 289-315.",
@@ -185,6 +188,33 @@ T([["Line item", "Firm-years", "Within 2% (%)", "Within 10% (%)", "Median gap (%
 T([["Screen input (FY2026)", "Firms", "Spearman", "Median abs. diff."]] + [[q.ratio, q.n, q.spearman, q.median_abs_diff] for q in xr.itertuples()], widths=[2.2, 0.8, 1.0, 1.4], size=8.5)
 _p("The inputs behind the screen are consistent across two online sources, so the weak back-test result in Figure 3 reflects the models, the short history and the small peer set rather than data errors. "
    "Because both providers read the same filings, this does not test whether the filings themselves are accurate.")
+doc.add_heading("Causal lens: difference-in-differences and class-case tests", 2)
+import sys; sys.path.insert(0, str(ROOT / "src")); import analytics as A
+_u = pd.read_csv(D / "universe.csv"); _P = A.build_panel(pd.read_csv(D / "screener_long.csv"), _u)
+_nf = _u[(_u.sector != "Financial Services") & (_u.cohort == "Nifty 50")]
+_g = lambda secs: list(_nf[_nf.sector.isin(secs)].ticker)
+_ev = [("COVID-19 shock, event FY2021: sales growth", _g(["Consumer Cyclical", "Industrials"]), _g(["Technology", "Healthcare", "Consumer Defensive"]), "sales_growth", 2021, 4, 1),
+       ("Corporate tax cut (Sept 2019), event FY2020: net margin", _g(["Consumer Cyclical", "Consumer Defensive", "Industrials", "Utilities", "Basic Materials"]), _g(["Technology", "Healthcare"]), "net_margin", 2020, 4, 1),
+       ("Hindenburg report on Adani group (Jan 2023), event FY2024: debt/assets", ["ADANIENT.NS", "ADANIPORTS.NS"], [t for t in _g(list(_nf.sector.unique())) if t not in ("ADANIENT.NS", "ADANIPORTS.NS")], "debt_assets", 2024, 4, 3)]
+_rows = [["Event and outcome", "Treated / control", "DiD (pp)", "Placebo (pp)", "Reading"]]
+for nm, t, c, col, e, pr, po in _ev:
+    q = A.did_estimate(_P, t, c, col, e, pr, po)
+    if q: _rows.append([nm, f"{q['n_t']} / {q['n_c']}", f"{q['est'] * 100:+.1f}", "n/a" if q["placebo"] is None else f"{q['placebo'] * 100:+.1f}",
+                        "Descriptive only (few treated firms)" if q["n_t"] < 10 else ("Pre-trend concern" if q["placebo"] is not None and abs(q["placebo"]) >= 0.25 * abs(q["est"]) else "Consistent with effect")])
+_bt = {k: A.flag_backtest(_P, fl_, "roa") for k, fl_ in [("accruals", "accruals"), ("cash", "cash")]}
+_p("Difference-in-differences does not say whether one firm cheated; it answers group-level questions: do red-flagged firms deteriorate afterwards (validation), and did a rule or shock change earnings quality (impact). "
+   "The dashboard's forensic back-test treats each flagged firm-year as an event and compares it with unflagged firm-years in the same year, removing year effects and clustering by firm. "
+   + " ".join(f"{lab_} flag: ROA changes by {b_['stats'][1]['beta'] * 100:+.2f} pp relative to unflagged firms after one year (t = {b_['stats'][1]['beta'] / b_['stats'][1]['se']:.1f}; {b_['stats'][1]['n_flag']} flagged firm-years, {b_['stats'][1]['firms']} firms)." for lab_, b_ in [("The high-accrual", _bt["accruals"]), ("The weak-cash-conversion", _bt["cash"])] if b_ and 1 in b_["stats"])
+   + " Cash flow margin rises after the accrual flag, the accrual reversal that Sloan (1996) describes. Caveats: a small large-cap sample, flagged firms often just peaked (mean reversion), and the result shows the flag is informative, not that any firm manipulated.")
+_p("A DiD lab was added to the dashboard (Sessions 15-16). Its calculator reproduces the end-term paper's difference-in-differences and triple-difference answers exactly (DiD low-ticket 400, DDD 400, high-ticket DiD 800), "
+   "and an event-study tool applies the same logic to ten years of company data from Screener.in with firm-clustered standard errors and a placebo test on pre-event years (Bertrand, Duflo and Mullainathan, 2004).")
+T(_rows, widths=[2.4, 0.9, 0.7, 0.8, 1.7], size=8)
+_p("Reading. The COVID-19 comparison shows the largest effect, but the treated group's growth was already falling before FY2021 (auto-sector slowdown), so part of the estimate reflects earlier divergence; the placebo test exists to expose exactly this. "
+   "The tax-cut comparison is not distinguishable from noise with a sector proxy for domestic revenue share, and its placebo gap is larger than the estimate itself. The Adani comparison has only two treated firms and is purely descriptive; the allegations are contested and the test says nothing about wrongdoing.")
+_z = A.window_stats(_P, "ZEEL.NS", 2017, 2019); _c = A.window_stats(_P, "COFFEEDAY.NS", 2017, 2019)
+_p(f"Class-case tests. Using ten-year history, Zee's FY2017-19 accruals averaged {_z['acc']:.1%} of assets against {_z['acc_u']:.1%} for the typical non-financial firm, and its CFO/NI averaged {_z['cfo_ni']:.2f} against {_z['cfo_ni_u']:.2f}, "
+   f"supporting the class note that profit ran well ahead of cash. Coffee Day's accruals ({_c['acc']:.1%} vs {_c['acc_u']:.1%}) and CFO/NI ({_c['cfo_ni']:.2f} vs {_c['cfo_ni_u']:.2f}) looked ordinary or better, consistent with the class note that its diversion sat in related-party advances rather than in the profit line. "
+   "Wirecard and Ricoh India cannot be tested with free data (non-Indian and delisted respectively), which illustrates the screen's blind spots.")
 doc.add_heading("Case readings", 2)
 B(["PC Jeweller (High)::  M-score above threshold, sales growth index 1.49, negative cash conversion. Check inventory and gold-loan balances.",
    "Tata Motors PV (High)::  Accruals at the 96th percentile but cash conversion 1.02 and Benford acceptable: a probable structural false positive from restructuring; restate comparatives before concluding.",

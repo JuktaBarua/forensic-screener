@@ -13,6 +13,7 @@ if not (DATA / "metrics_year.csv").exists() and (ROOT / "metrics_year.csv").exis
     DATA = ROOT          # files were uploaded loose in the repo root instead of data/
 sys.path.insert(0, str(ROOT / "src"))
 import memo as M
+import analytics as A
 from forensic_engine import WEIGHTS
 
 st.set_page_config(page_title="Forensic Earnings-Quality Screener", layout="wide", page_icon="🔍")
@@ -152,6 +153,16 @@ scored_tier = scored[scored.tier_w.isin(tier_sel)]
 peers = yr[~yr.fin]
 all_scored = yr[yr.score_w.notna()]
 lab = dict(zip(mall.ticker, mall.name))
+uni = pd.read_csv(DATA / "universe.csv")
+
+
+@st.cache_data
+def panel_data(_k):
+    sp = DATA / "screener_long.csv"
+    return A.build_panel(pd.read_csv(sp), pd.read_csv(DATA / "universe.csv")) if sp.exists() else None
+
+
+panel = panel_data("v1")
 
 # ------------------------------------------------------------------------------------------ hero
 st.markdown(f"""<div class="hero">
@@ -163,7 +174,7 @@ red-flag scores using the tools taught in the course, and explains every number 
 <span class="pill">✅ {len(all_scored)} scored (FY{fy})</span><span class="pill">🌐 Live sources: NSE · Yahoo Finance · Screener.in</span>
 </div>""", unsafe_allow_html=True)
 
-t0, t1, t2, t3, t4, t5 = st.tabs(["🏠 Start here", "📊 Universe screener", "🏢 Company deep-dive", "⚖️ Peer comparison", "🤖 AI analyst memo", "📘 Method & validation"])
+t0, t1, t2, t3, tdid, tcase, t4, t5 = st.tabs(["🏠 Start here", "📊 Universe screener", "🏢 Company deep-dive", "⚖️ Peer comparison", "🧪 DiD lab", "📚 Case lab", "🤖 AI analyst memo", "📘 Method & validation"])
 
 # ------------------------------------------------------------------------------------------ TAB 0: START HERE
 with t0:
@@ -212,7 +223,9 @@ with t0:
         "4. **🤖 AI analyst memo**: pick PC Jeweller and flip between *Rule-based* and *Claude-drafted*. Open *Fact sheet* to see exactly which numbers the AI was allowed to use.\n"
         "5. **Sidebar what-if**: open *Adjust model weights*, set *Distress* to 0, and watch the ranking change. This shows the score is a judgement, not a law of nature.\n"
         "6. **📘 Method & validation**: read the back-test and the data cross-check, including the limitations.\n"
-        "7. **⟳ Refresh live data** (sidebar) re-downloads the latest statements from NSE and Yahoo Finance (about 3 minutes).")
+        "7. **🧪 DiD lab**: in the calculator, load the end-term Question 1 numbers and see difference-in-differences and triple difference solved step by step; but start with the **forensic back-test**: do high-accrual firms really see profits fall afterwards? Then try the event study and read its placebo test.\n"
+        "8. **📚 Case lab**: open *Café Coffee Day* or *Zee*. The dashboard tests the class notes' claims against 10 years of data, for example whether Zee's FY17-19 accruals really were high.\n"
+        "9. **⟳ Refresh live data** (sidebar) re-downloads the latest statements from NSE and Yahoo Finance (about 3 minutes).")
 
     with st.expander("📖 Glossary: what each test means in plain English"):
         st.markdown("""
@@ -228,6 +241,8 @@ with t0:
 | **REM** | Real earnings management: cutting discretionary spending or distorting cash flow to hit profit targets | high index |
 | **CFO / NI** | Operating cash flow divided by net income over 3 years | well below 1 (profit not turning into cash) |
 | **Benford's law** | In natural numbers, about 30% start with digit 1 and 4.6% with 9. Made-up numbers drift from this | MAD above 0.015 = non-conformity (weak signal by itself) |
+| **DiD / triple DiD** | (Forensic use: does a red flag predict later trouble, or did a rule change earnings quality?) Compares the change in an exposed (treated) group with the change in a comparable unexposed (control) group; triple DiD adds a second split | Result only credible if pre-event trends were parallel (check the placebo) |
+| **RDD / DiDC** | RDD compares outcomes just above and below a cutoff; DiDC is the change in that jump after a policy | A large jump that changes after the policy |
 | **Altman Z″** | Bankruptcy-risk score (emerging-market version) | below 4.15 = distress, which raises the incentive to manipulate |
 """)
     callout("<b>Important:</b> this is a screening tool built for learning. Flags can have innocent explanations (mergers, demergers, new accounting standards, one-off items). "
@@ -392,6 +407,334 @@ with t3:
     st.caption("**How to read:** compare bars within a year to see who is better or worse, and across years to see the trend. For Beneish, Sloan, Jones, REM and Risk score, **higher = worse**. For Altman, CFO/NI and margins, **higher = healthier**.")
     if pick:
         st.dataframe(mall[mall.ticker.isin(pick)].pivot(index="name", columns="fy", values=col).round(3), width="stretch")
+
+# ------------------------------------------------------------------------------------------ TAB: DiD LAB
+with tdid:
+    section("DiD lab", "Difference-in-differences (sessions 15-16): did an event change outcomes for exposed firms differently from comparable unexposed firms?")
+    callout("<b>What DiD can and cannot do for a forensic analyst.</b> It does <u>not</u> tell you whether one company cheated; that is the screener's job. DiD compares the change in an "
+            "<b>exposed</b> group with the change in a <b>comparable unexposed</b> group, so it answers two group-level questions: "
+            "<b>(1) Validation:</b> do red-flagged firms really do worse afterwards than unflagged ones? "
+            "<b>(2) Impact:</b> did a rule, enforcement action or shock change earnings quality for exposed firms? It is credible only if both groups were on <b>parallel trends</b> before the event.")
+    dbt, d2, d1 = st.tabs(["1️⃣ Do red flags predict trouble? (forensic back-test)", "2️⃣ Event study (any event)", "3️⃣ Calculator & exam practice"])
+
+    with dbt:
+        if panel is None:
+            callout("The 10-year Screener panel (data/screener_long.csv) is not available in this deployment.", "warn")
+        else:
+            section("Do red flags predict trouble?", "A DiD-style test of the screener's own logic (Sloan, 1996): after a firm-year is flagged, does its outcome change differently from unflagged firms?")
+            callout("<b>The idea:</b> if high accruals or weak cash conversion really signal low-quality earnings, flagged firms should see profits <i>fall</i> and cash flow <i>catch up</i> in the following years, "
+                    "compared with unflagged firms in the same year. Each firm-year is an 'event'; the control group is every unflagged firm-year. Year effects are removed and standard errors are clustered by firm. "
+                    "Financial firms are excluded.")
+            q1, q2 = st.columns(2)
+            fl = q1.selectbox("Red flag", list(A.FLAGS), key="bt_flag")
+            ocb = q2.selectbox("Outcome to track", ["Return on assets", "Net margin (profit / sales)", "Operating cash flow / sales"], key="bt_out")
+            colb = A.OUT[ocb][0]
+            BT = A.flag_backtest(panel, A.FLAGS[fl], colb)
+            if BT is None or not BT["stats"]:
+                callout("Not enough flagged firm-years for this combination.", "warn")
+            else:
+                st1, st2 = BT["stats"].get(1), BT["stats"].get(2)
+                k = st.columns(4)
+                if st1:
+                    k[0].metric("Effect after 1 year", f"{st1['beta'] * 100:+.2f} pp", f"t = {st1['beta'] / st1['se']:.1f}", delta_color="off", help="Flagged minus unflagged change in the outcome, same-year effects removed")
+                    k[1].metric("95% interval (1 yr)", f"{(st1['beta'] - 1.96 * st1['se']) * 100:+.1f} to {(st1['beta'] + 1.96 * st1['se']) * 100:+.1f}")
+                if st2: k[2].metric("Effect after 2 years", f"{st2['beta'] * 100:+.2f} pp", f"t = {st2['beta'] / st2['se']:.1f}", delta_color="off")
+                if st1: k[3].metric("Flagged firm-years", f"{st1['n_flag']}", f"{st1['firms']} different firms", delta_color="off")
+                cv = BT["curves"].copy(); cv["mean"] = cv["mean"] * 100
+                f = go.Figure()
+                for flg, nm, colr in [(True, "Flagged", ORANGE), (False, "Not flagged", BLUE)]:
+                    z = cv[cv.flag == flg].sort_values("k")
+                    f.add_scatter(x=z.k, y=z["mean"], mode="lines+markers", name=nm, line=dict(color=colr, width=3), marker=dict(size=9))
+                f.add_vline(x=0, line_dash="dot", line_color=MUTED, annotation_text="flag year", annotation_position="top left")
+                f.add_hline(y=0, line_color=GRID)
+                f.update_layout(title=f"{ocb}: change versus the flag year, by years since flag", xaxis=dict(dtick=1, title="Years relative to the flag year"), yaxis_title="Average change (pp)")
+                st.plotly_chart(style(f, 380), width="stretch")
+                st.caption("**How to read:** each line shows how the outcome moved relative to the flag year (0). If the orange line bends away from the blue line after year 0, flagged firms behave differently from others once flagged.")
+                if st1:
+                    tt = st1["beta"] / st1["se"]
+                    expect_neg = colb in ("roa", "net_margin")
+                    right = (st1["beta"] < 0) if expect_neg else (st1["beta"] > 0)
+                    word = "fell" if st1["beta"] < 0 else "rose"
+                    msg = (f"One year after being flagged, flagged firms' <b>{ocb.lower()}</b> {word} by <b>{abs(st1['beta']) * 100:.2f} pp more</b> than unflagged firms' (t = {tt:.1f}, "
+                           f"{st1['n_flag']} flagged firm-years from {st1['firms']} firms). ")
+                    if abs(tt) >= 2 and right:
+                        callout(msg + "This is the pattern a working red flag should produce: " + ("profits deteriorate after the flag." if expect_neg else "cash flow catches up as earlier accruals reverse."), "good")
+                    elif abs(tt) >= 2:
+                        callout(msg + "This is <b>opposite</b> to what a working red flag predicts, so treat this flag with caution.", "warn")
+                    else:
+                        callout(msg + "The difference is <b>not statistically clear</b> in this sample.")
+            callout("<b>Read with care:</b> (1) the sample is a small, large-cap universe (Nifty 50 plus a watchlist); (2) flagged firms had often just peaked, so ordinary <i>mean reversion</i> can mimic part of the pattern; "
+                    "(3) overlapping firm-years and few firms limit precision; (4) this is evidence the flag is informative, not proof that any flagged firm manipulated earnings.", "warn")
+            callout("<b>So what for the analyst:</b> use accrual and cash-conversion flags as <i>early warnings of earnings that will not last</i>, which matters for credit, valuation and audit planning, then confirm with documents.", "good")
+
+    with d1:
+        st.markdown("#### Difference-in-differences (2 × 2)")
+        st.caption("Pre-filled with the low-ticket loans from the end-term paper (Question 1). Change any number.")
+        metric_name = st.text_input("What are you measuring?", "Average profit per loan (₹)", key="did_metric")
+        c = st.columns(4)
+        tb = c[0].number_input("Treated: before", value=2600.0, step=50.0, key="did_tb")
+        ta_ = c[1].number_input("Treated: after", value=3200.0, step=50.0, key="did_ta")
+        cb = c[2].number_input("Control: before", value=2500.0, step=50.0, key="did_cb")
+        ca_ = c[3].number_input("Control: after", value=2700.0, step=50.0, key="did_ca")
+        dT, dC = ta_ - tb, ca_ - cb; did = dT - dC
+        k = st.columns(3)
+        k[0].metric("Change in treated", f"{dT:+,.0f}"); k[1].metric("Change in control", f"{dC:+,.0f}"); k[2].metric("DiD = effect of the event", f"{did:+,.0f}")
+        f = go.Figure()
+        f.add_scatter(x=["Before", "After"], y=[tb, ta_], mode="lines+markers", name="Treated", line=dict(color=BLUE, width=3), marker=dict(size=10))
+        f.add_scatter(x=["Before", "After"], y=[cb, ca_], mode="lines+markers", name="Control", line=dict(color=ORANGE, width=3), marker=dict(size=10))
+        f.add_scatter(x=["Before", "After"], y=[tb, tb + dC], mode="lines", name="Treated if it had followed control", line=dict(color=BLUE, width=2, dash="dash"))
+        f.add_annotation(x="After", y=(ta_ + tb + dC) / 2, text=f"DiD = {did:+,.0f}", showarrow=False, xanchor="left", xshift=12, font=dict(color=NAVY, size=14))
+        f.update_layout(title=f"{metric_name}: treated vs control", yaxis_title=metric_name)
+        st.plotly_chart(style(f, 330), width="stretch")
+        st.markdown(f"**Step 1:** treated changed by {ta_:,.0f} − {tb:,.0f} = **{dT:+,.0f}**.  **Step 2:** control changed by {ca_:,.0f} − {cb:,.0f} = **{dC:+,.0f}** (the change that would have happened anyway).  "
+                    f"**Step 3:** DiD = {dT:+,.0f} − ({dC:+,.0f}) = **{did:+,.0f}**.")
+        st.caption("**How to read:** the dashed line is the counterfactual. The vertical gap between the solid blue line and the dashed line after the event is the DiD effect.")
+
+        st.markdown("#### Triple difference (DDD)")
+        st.caption("Adds a second split (for example high vs low ticket size) to ask: *which segment benefits most?* Pre-filled with the end-term paper's table.")
+        h, l = st.columns(2)
+        h.markdown("**High group**"); l.markdown("**Low group**")
+        v = {}
+        for col_, grp in [(h, "high"), (l, "low")]:
+            c1_, c2_ = col_.columns(2)
+            d0 = {"high": (3100.0, 4200.0, 3000.0, 3300.0), "low": (2600.0, 3200.0, 2500.0, 2700.0)}[grp]
+            v[grp] = dict(tb=c1_.number_input("Treated before", value=d0[0], key=f"t_{grp}_tb"), ta=c2_.number_input("Treated after", value=d0[1], key=f"t_{grp}_ta"),
+                          cb=c1_.number_input("Control before", value=d0[2], key=f"t_{grp}_cb"), ca=c2_.number_input("Control after", value=d0[3], key=f"t_{grp}_ca"))
+        did_h = (v["high"]["ta"] - v["high"]["tb"]) - (v["high"]["ca"] - v["high"]["cb"])
+        did_l = (v["low"]["ta"] - v["low"]["tb"]) - (v["low"]["ca"] - v["low"]["cb"])
+        ddd = did_h - did_l
+        k = st.columns(3)
+        k[0].metric("DiD, high group", f"{did_h:+,.0f}"); k[1].metric("DiD, low group", f"{did_l:+,.0f}"); k[2].metric("Triple difference", f"{ddd:+,.0f}", help="DiD(high) − DiD(low)")
+        st.markdown(f"**DDD = DiD(high) − DiD(low) = {did_h:+,.0f} − ({did_l:+,.0f}) = {ddd:+,.0f}.** "
+                    + ("The effect is **larger** in the high group." if ddd > 0 else "The effect is **smaller** in the high group." if ddd < 0 else "The effect is the same in both groups."))
+        H, Lw = v["high"], v["low"]
+        b = dict(b0=Lw["cb"], b1=Lw["ca"] - Lw["cb"], b2=Lw["tb"] - Lw["cb"], b3=H["cb"] - Lw["cb"], b4=did_l,
+                 b5=(H["ca"] - H["cb"]) - (Lw["ca"] - Lw["cb"]), b6=(H["tb"] - H["cb"]) - (Lw["tb"] - Lw["cb"]), b7=ddd)
+        with st.expander("Same answer from the regression: Profit = β0 + β1·Post + β2·Treat + β3·High + β4·Post×Treat + β5·Post×High + β6·Treat×High + β7·Post×Treat×High"):
+            st.dataframe(pd.DataFrame({"Coefficient": ["β0 (control, low, before)", "β1 Post", "β2 Treat", "β3 High", "β4 Post×Treat = DiD for low group", "β5 Post×High",
+                                                       "β6 Treat×High", "β7 Post×Treat×High = triple difference"], "Value": [b[f"b{i}"] for i in range(8)]}), hide_index=True, width="stretch")
+            tot = H["ta"] - Lw["cb"]
+            st.markdown(f"- **DiD for the high group** = β4 + β7 = **{b['b4'] + b['b7']:+,.0f}**\n- **Total gap, treated-high after vs control-low before** = sum of all β = **{tot:+,.0f}**  (check: {H['ta']:,.0f} − {Lw['cb']:,.0f})\n"
+                        f"- **Change in treated low group** = {Lw['ta'] - Lw['tb']:+,.0f}")
+            st.caption("With the paper's numbers this gives β = 2500, 200, 100, 500, 400, 100, 0, 400, exactly the coefficients quoted in Question 1.")
+
+        with st.expander("RDD and DiDC (regression discontinuity, session 16)"):
+            st.markdown("**RDD:** compare outcomes just above and just below a cutoff (for example credit score 700). **DiDC** = RDD *after* a policy change minus RDD *before*: the change in the jump.")
+            r1 = st.columns(4)
+            bb = r1[0].number_input("Before policy: below cutoff (%)", value=8.0, key="rdd_bb"); ba = r1[1].number_input("Before policy: above cutoff (%)", value=7.0, key="rdd_ba")
+            ab = r1[2].number_input("After policy: below cutoff (%)", value=9.0, key="rdd_ab"); aa = r1[3].number_input("After policy: above cutoff (%)", value=5.0, key="rdd_aa")
+            j0, j1 = ba - bb, aa - ab
+            st.markdown(f"Jump before = {ba:g} − {bb:g} = **{j0:+g} pp**; jump after = {aa:g} − {ab:g} = **{j1:+g} pp**; **DiDC = {j1:+g} − ({j0:+g}) = {j1 - j0:+g} pp**.")
+            st.caption("Defaults follow the lecture example (default rates around a 700 credit-score cutoff, policy change 2022 → 2024).")
+
+    with d2:
+        if panel is None:
+            callout("The 10-year Screener panel (data/screener_long.csv) is not available in this deployment.", "warn")
+        else:
+            nfu = uni[uni.sector != "Financial Services"]
+            n50 = nfu[nfu.cohort == "Nifty 50"]
+            sec_t = lambda secs: list(n50[n50.sector.isin(secs)].ticker)
+            allnf = list(n50.ticker)
+            PRESETS = {
+                "COVID-19 shock (event FY2021)": dict(
+                    t=sec_t(["Consumer Cyclical", "Industrials"]), c=sec_t(["Technology", "Healthcare", "Consumer Defensive"]), out="Sales growth", ev=2021, pre=4, post=1,
+                    note="Treated: consumer-cyclical and industrial firms (autos, travel, retail, capital goods). Control: IT, pharma and staples that kept trading. FY2021 = year ended March 2021."),
+                "Corporate tax cut, Sept 2019 (event FY2020)": dict(
+                    t=sec_t(["Consumer Cyclical", "Consumer Defensive", "Industrials", "Utilities", "Basic Materials"]), c=sec_t(["Technology", "Healthcare"]), out="Net margin (profit / sales)", ev=2020, pre=4, post=1,
+                    note="Mirrors the lecture example (domestic-facing firms vs exporters). We only have sectors as a proxy for domestic revenue share, and many firms did not switch to the lower rate, so expect a weak signal."),
+                "Hindenburg report on the Adani group, Jan 2023 (event FY2024)": dict(
+                    t=["ADANIENT.NS", "ADANIPORTS.NS"], c=[t for t in allnf if t not in ("ADANIENT.NS", "ADANIPORTS.NS")], out="Debt / assets", ev=2024, pre=4, post=3,
+                    note="Only two treated firms, so this is descriptive, not statistical. The allegations were contested; this tests nothing about wrongdoing, only whether financing ratios moved differently."),
+                "Custom (choose your own)": dict(t=[], c=allnf, out="Accruals / lagged assets", ev=2021, pre=4, post=2, note="<b>Forensic use:</b> choose firms hit by an event (an enforcement action, a rule change, a fraud disclosure in their sector) as treated, similar firms as control, and track <b>accruals</b> or <b>CFO / net income</b> to see whether earnings quality changed."),
+            }
+            st.caption("The first three events are course-style examples of the method. For forensic work, use *Custom* and track accruals or cash conversion.")
+            pn = st.selectbox("Choose an event", list(PRESETS), key="ev_preset"); P0 = PRESETS[pn]; kk = str(abs(hash(pn)) % 10 ** 6)
+            callout(P0["note"])
+            lab_t = dict(zip(uni.ticker, uni.name)); fmt = lambda t: lab_t.get(t, t)
+            g1, g2 = st.columns(2)
+            treated = g1.multiselect("Treated firms (exposed to the event)", list(nfu.ticker), default=P0["t"], format_func=fmt, key="ev_t" + kk)
+            control = g2.multiselect("Control firms (comparable, not exposed)", list(nfu.ticker), default=P0["c"], format_func=fmt, key="ev_c" + kk)
+            o1, o2, o3, o4 = st.columns(4)
+            outc = o1.selectbox("Outcome", list(A.OUT), index=list(A.OUT).index(P0["out"]), key="ev_o" + kk)
+            ev = o2.slider("Event fiscal year", 2012, 2025, P0["ev"], key="ev_y" + kk, help="First fiscal year (ending March) affected by the event")
+            pre = o3.slider("Years before", 2, 6, P0["pre"], key="ev_p" + kk)
+            post = o4.slider("Years after", 1, 4, P0["post"], key="ev_q" + kk)
+            col, unit = A.OUT[outc]; sc_ = 100 if unit == "pp" else 1; ul = "pp" if unit == "pp" else "×"
+            overlap = set(treated) & set(control)
+            if not treated or not control:
+                callout("Choose at least one treated and one control firm.", "warn")
+            elif overlap:
+                callout("A firm cannot be both treated and control. Remove: " + ", ".join(fmt(t) for t in overlap), "warn")
+            else:
+                R = A.did_estimate(panel, treated, control, col, ev, pre, post)
+                if R is None:
+                    callout("Not enough data for this combination (each firm needs at least one year before and one after). Try fewer years or a different event year.", "warn")
+                else:
+                    est, se_ = R["est"] * sc_, R["se"] * sc_; plc = None if R["placebo"] is None else R["placebo"] * sc_
+                    k = st.columns(5)
+                    k[0].metric("Treated: change", f"{R['d_t'] * sc_:+.2f} {ul}"); k[1].metric("Control: change", f"{R['d_c'] * sc_:+.2f} {ul}")
+                    k[2].metric("DiD estimate", f"{est:+.2f} {ul}", help="(treated after − before) − (control after − before)")
+                    k[3].metric("95% interval", f"{est - 1.96 * se_:+.1f} to {est + 1.96 * se_:+.1f}", help="Firm-clustered standard errors; unreliable with few treated firms")
+                    k[4].metric("Placebo (pre-event)", "n/a" if plc is None else f"{plc:+.2f} {ul}", help="DiD using only pre-event years with a fake event date. Should be near zero if trends were parallel.")
+                    by = R["by_year"] * sc_
+                    f = go.Figure()
+                    f.add_vrect(x0=ev - 0.5, x1=by.index.max() + 0.5, fillcolor="#f1f6ff", opacity=0.9, line_width=0)
+                    f.add_scatter(x=by.index, y=by[1], mode="lines+markers", name=f"Treated (n={R['n_t']})", line=dict(color=BLUE, width=3), marker=dict(size=8))
+                    f.add_scatter(x=by.index, y=by[0], mode="lines+markers", name=f"Control (n={R['n_c']})", line=dict(color=ORANGE, width=3), marker=dict(size=8))
+                    prey = by[by.index < ev]; postx = by[by.index >= ev]
+                    if len(prey) and len(postx):
+                        cf = prey[1].mean() + (postx[0] - prey[0].mean())
+                        f.add_scatter(x=postx.index, y=cf, mode="lines", name="Treated if it had followed control", line=dict(color=BLUE, width=2, dash="dash"))
+                    f.add_vline(x=ev - 0.5, line_dash="dot", line_color=MUTED, annotation_text=f"event: FY{ev}", annotation_position="top left")
+                    f.update_layout(title=f"{outc}: average by fiscal year", xaxis=dict(dtick=1, title="Fiscal year (ending March)"), yaxis_title=f"{outc} ({ul})")
+                    st.plotly_chart(style(f, 400), width="stretch")
+                    st.caption("**How to read:** before the shaded area the two lines should move together (parallel trends). In the shaded area, the gap between the solid blue line and the dashed counterfactual is the DiD effect.")
+                    # plain-English verdict
+                    flags = []
+                    if R["n_t"] < 10: flags.append(f"only <b>{R['n_t']}</b> treated firms: treat the result as descriptive, not statistical")
+                    if plc is not None and abs(plc) >= 0.5 * abs(est): flags.append(f"the placebo gap ({plc:+.2f}) is as large as the estimate ({est:+.2f}), so <b>pre-event trends were not parallel</b> and the estimate is not credible")
+                    elif plc is not None and abs(plc) >= 0.25 * abs(est): flags.append(f"the pre-event placebo gap ({plc:+.2f}) is {abs(plc) / abs(est):.0%} of the estimate, so <b>part of it may reflect trends that already differed before the event</b> (look at the chart before the shaded area)")
+                    sig = (est - 1.96 * se_ > 0) or (est + 1.96 * se_ < 0)
+                    verdict = (f"After FY{ev}, treated firms' {outc.lower()} changed by <b>{R['d_t'] * sc_:+.2f} {ul}</b> versus <b>{R['d_c'] * sc_:+.2f} {ul}</b> for control firms, "
+                               f"so the DiD estimate is <b>{est:+.2f} {ul}</b>. ")
+                    if flags: callout(verdict + "<b>Caution:</b> " + "; ".join(flags) + ".", "warn")
+                    elif sig: callout(verdict + "The interval excludes zero and the placebo is small, so the data are <b>consistent with an effect</b> of the event (association, not proof of causation).", "good")
+                    else: callout(verdict + "The interval includes zero, so the effect is <b>not distinguishable from noise</b> with this sample.")
+
+                    with st.expander("➕ Triple difference: which treated firms are most affected?"):
+                        sp_ = st.radio("Split firms by", ["size", "leverage"], horizontal=True, key="ev_split" + kk, help="High = above the median of the pre-event average (total assets or debt/assets)")
+                        T3 = A.triple_did(panel, treated, control, col, ev, pre, post, sp_)
+                        if T3.get("DDD") is None:
+                            st.info("Not enough treated and control firms in both halves for a triple difference.")
+                        else:
+                            kk3 = st.columns(3)
+                            kk3[0].metric(f"DiD, high {sp_}", f"{T3['High']['est'] * sc_:+.2f} {ul}", f"{T3['High']['n_t']} treated / {T3['High']['n_c']} control", delta_color="off")
+                            kk3[1].metric(f"DiD, low {sp_}", f"{T3['Low']['est'] * sc_:+.2f} {ul}", f"{T3['Low']['n_t']} treated / {T3['Low']['n_c']} control", delta_color="off")
+                            kk3[2].metric("Triple difference", f"{T3['DDD'] * sc_:+.2f} {ul}", help="DiD(high) − DiD(low)")
+                            st.caption("Same logic as the calculator: the effect of the event is estimated separately for high and low groups, and the gap between them is the triple difference. Small groups make this very noisy.")
+                    with st.expander("Firms included"):
+                        inc = R["data"].groupby("ticker").agg(group=("treat", lambda s: "Treated" if s.iloc[0] else "Control"), years=("fy", "count")).reset_index()
+                        inc["Company"] = inc.ticker.map(fmt); st.dataframe(inc[["Company", "group", "years"]], hide_index=True, width="stretch")
+            st.caption("Source: Screener.in public pages (Rs crore, consolidated where available), non-financial firms; ratios winsorised at 5th/95th percentile. DiD shows association under the parallel-trends assumption, not proof of cause.")
+
+# ------------------------------------------------------------------------------------------ TAB: CASE LAB
+with tcase:
+    section("Case lab", "The class cases, tested against the numbers. Each case shows the story, what the screen sees, and whether the class notes' claims hold up in the data.")
+    callout("<b>Why cases matter:</b> a screen is only credible if it can be checked against known stories. Here we use <b>10+ years</b> of Screener.in history (longer than the main dashboard) "
+            "to test claims made in class. Where the screen is blind, the case says so: that is the lesson.")
+    CASES = {
+        "TCS: the class assignment (Beneish and Benford)": dict(tk="TCS.NS", kind="tcs"),
+        "Infosys: whistleblower allegations (Session 16 reading)": dict(tk="INFY.NS", kind="window", w=(2018, 2020), mark=(2019, 2020),
+            ctx=["In October 2019 anonymous whistleblowers alleged that senior management pushed aggressive accounting to lift short-term revenue and profit (public record).",
+                 "The Session 16 reading applies forensic algorithms (Beneish M and others) to test those allegations from the published numbers.",
+                 "As publicly reported, the audit committee's independent investigation did not substantiate the allegations. Check the reading for its exact conclusion."],
+            lesson="A statement-based screen can show whether the *numbers* look unusual; it cannot prove or disprove claims about *instructions and intent*. Pair it with document review and interviews.",
+            nxt=["Compare unbilled revenue and large-deal margins in the notes.", "Trace revenue recognition policy changes and auditor key audit matters.", "Compare against the three closest peers, not the whole universe."]),
+        "Café Coffee Day: money out through the back door": dict(tk="COFFEEDAY.NS", kind="window", w=(2017, 2019), mark=(2019, 2019),
+            ctx=["Per class notes (from SEBI and NFRA orders): about ₹3,535 crore moved from CCD's subsidiaries to MACEL, a company owned by the founder's family, as 'loans' and 'advances'.",
+                 "At March 2019 MACEL gave 'repayment' cheques of ₹1,706 crore that were not backed by funds and were not cashed before year-end, so the loan looked smaller (window dressing).",
+                 "The founder died in July 2019. SEBI fined the company ₹26 crore; NFRA fined the FY2019 auditor ₹10 crore and the FY2020 auditor ₹2 crore. These are regulator findings, some under appeal."],
+            claim="Class note: accruals were not high and cash flow looked healthy, because the problem sat in related-party advances, not in the profit line.",
+            lesson="Clean profits do not mean clean balance sheets. A cash-flow and accruals screen sees nothing when the diversion is booked as an asset (advances to a related party).",
+            nxt=["Read the related-party and 'advances' notes first.", "Confirm balances and year-end cheques with counterparties.", "Compare subsidiary cash with what the consolidated statements show."]),
+        "Zee Entertainment: the company as the promoters' safety net": dict(tk="ZEEL.NS", kind="window", w=(2017, 2019), mark=(2019, 2019),
+            ctx=["Per class notes: promoter-group companies borrowed against Zee shares (over 90% pledged in 2019), creating pressure to keep the share price up.",
+                 "Case A: a ₹200 crore Zee fixed deposit was taken by Yes Bank against a letter of comfort for group loans; SEBI says the board did not know. Case B: Zee land was pledged for ₹726 crore of loans taken by promoter-linked companies, allegedly without approvals or related-party disclosure.",
+                 "SEBI's final order (31 July 2026) bars the chairman and CEO for a year and fines ₹1.48 crore in total. It is under appeal and Zee denies wrongdoing."],
+            claim="Class note: FY17-FY19 showed high accruals, with profit well above cash flow.",
+            lesson="Look past the company to the promoter's debt. Here the warning sign (profit far above cash) is visible in FY17-19, but the main facts were off the main statements: a letter, a pledge, a deposit.",
+            nxt=["Track promoter pledge levels every quarter.", "Test every related-party disclosure against board and audit-committee minutes.", "Confirm bank deposits and liens directly with the bank."]),
+        "Reliance Infrastructure: red flags in the Reliance group (Session 9)": dict(tk="RELINFRA.NS", kind="window", w=(2017, 2019), mark=(2018, 2020),
+            ctx=["Class case: red flags in the Reliance group, with Reliance Infrastructure as the focus (Session 9).", "The screen's own reading of recent years is dominated by financial distress rather than accounting-quality signals (see numbers below)."],
+            lesson="High leverage and distress raise the incentive to manipulate (the fraud triangle's pressure), even when accrual and cash tests look unremarkable. Route distress to credit teams and still audit related-party exposure.",
+            nxt=["Examine inter-corporate loans and group exposures.", "Test recoverability of receivables and arbitration awards.", "Read auditor qualifications and key audit matters."]),
+        "Wirecard and Ricoh India: where this screen is blind": dict(kind="text"),
+    }
+    cname = st.selectbox("Choose a case", list(CASES), key="case_sel"); C = CASES[cname]
+
+    def case_charts(tk, mark):
+        pd_ = panel[(panel.ticker == tk) & (panel.fy >= 2015)].sort_values("fy")
+        a, b = st.columns(2)
+        f = go.Figure(); f.add_bar(name="Net income", x=pd_.fy, y=pd_.ni, marker_color=BLUE); f.add_bar(name="Operating cash flow", x=pd_.fy, y=pd_.cfo, marker_color=ORANGE)
+        if mark: f.add_vrect(x0=mark[0] - 0.5, x1=mark[1] + 0.5, fillcolor="#fff6ec", opacity=0.9, line_width=0)
+        f.update_layout(title="Profit vs operating cash flow (₹ crore)", barmode="group", xaxis=dict(dtick=1))
+        a.plotly_chart(style(f, 340), width="stretch")
+        a.caption("**How to read:** shaded years = the period in the case. When blue towers over orange, profit is not turning into cash.")
+        raw = panel[(panel.ticker == tk) & (panel.fy >= 2015)].sort_values("fy")
+        f = go.Figure(); f.add_scatter(x=raw.fy, y=raw.accruals * 100, name="Accruals / lagged assets", mode="lines+markers", line=dict(color=BLUE, width=3))
+        f.add_scatter(x=raw.fy, y=raw.debt_assets * 100, name="Debt / assets", mode="lines+markers", line=dict(color=ORANGE, width=3))
+        if mark: f.add_vrect(x0=mark[0] - 0.5, x1=mark[1] + 0.5, fillcolor="#fff6ec", opacity=0.9, line_width=0)
+        f.add_hline(y=0, line_color=MUTED, line_dash="dot")
+        f.update_layout(title="Accruals and leverage (% of assets)", xaxis=dict(dtick=1), yaxis_title="%")
+        b.plotly_chart(style(f, 340), width="stretch")
+        b.caption("**How to read:** accruals well above 0 = profit not backed by cash. A rising orange line = debt building up relative to assets.")
+
+    if C["kind"] == "tcs":
+        callout("<b>Class assignment (TCS):</b> (1) compare TCS with a competitor and ask whether ratios show health; (2) what worried Singh; (3) what is the Beneish M-score and what does it say for TCS; "
+                "(4) what is Benford's law and what does it say for TCS. The dashboard covers 1, 3 and 4 directly.")
+        peers_ = ["TCS.NS", "INFY.NS", "HCLTECH.NS", "TECHM.NS"]
+        t_ = yr[yr.ticker.isin(peers_)].set_index("ticker").loc[[p for p in peers_ if p in set(yr.ticker)]]
+        tbl_ = pd.DataFrame({"Net margin": t_.net_margin, "ROE": t_.roe, "Receivable days": t_.dso, "CFO / NI": t_.cfo_to_ni, "Debt / equity": t_.de_ratio, "Beneish M": t_.MScore,
+                             "Benford MAD": t_.benford_mad, "Altman Z″": t_.Altman, "Risk score": t_.score_w}).rename(index=lab).round(3)
+        section("1. TCS vs its competitors (FY" + str(fy) + ")", "Same sector, same business model, so ratios are directly comparable.")
+        st.dataframe(tbl_, width="stretch")
+        st.caption("Infosys and HCL Tech report in USD in Yahoo's data, but all of these are ratios, so currency does not matter.")
+        tr = yr[yr.ticker == "TCS.NS"].iloc[0]
+        a, b = st.columns(2)
+        comps = ["DSRI", "GMI", "AQI", "SGI", "DEPI", "SGAI", "LVGI"]
+        f = go.Figure(); f.add_bar(name="TCS", x=comps, y=[tr[k] for k in comps], marker_color=BLUE); f.add_bar(name="Peer median (all non-financials)", x=comps, y=peers[comps].median().values, marker_color="#cbd5e1")
+        f.add_hline(y=1, line_dash="dot", line_color=MUTED); f.update_layout(title="3. Beneish indices: TCS vs peers", barmode="group")
+        a.plotly_chart(style(f, 340), width="stretch")
+        a.caption(f"**Reading:** M-score = **{tr.MScore:.2f}**, below the −2.22 watch level, so the model does not flag TCS. The only index noticeably above 1 is AQI; check whether acquisitions or leases explain it.")
+        d_ = bdig[bdig.ticker == "TCS.NS"]
+        f = go.Figure(); f.add_bar(name="Observed", x=d_.digit, y=d_.observed * 100, marker_color=BLUE)
+        f.add_scatter(name="Benford expected", x=d_.digit, y=d_.expected * 100, mode="lines+markers", line=dict(color=INK, width=2))
+        f.update_layout(title="4. Benford first-digit test: TCS", xaxis=dict(dtick=1, title="Leading digit"), yaxis_title="% of numbers")
+        b.plotly_chart(style(f, 340), width="stretch")
+        b.caption(f"**Reading:** MAD = **{tr.benford_mad:.4f}** ({tr.benford_label}). With Yahoo's derived line items (totals repeated, rounded aggregates) this is more likely a data artefact than manipulation, which is why Benford carries only 10% weight.")
+        callout("<b>Take-away for the answer:</b> TCS looks financially strong (high margins, cash-backed profit) and unremarkable on Beneish. The Benford miss is a weak signal that needs raw filing data before drawing any conclusion.", "good")
+    elif C["kind"] == "text":
+        c1, c2 = st.columns(2)
+        c1.markdown('<div class="card"><h4>Wirecard (Sessions 8 and 15)</h4><p>A German payments company whose reported cash held in trustee accounts could not be found; it collapsed in 2020 (public record). '
+                    'It is not an Indian listed company, so it is not in this dashboard.</p><p><b>Lesson:</b> ratio screens look at reported numbers. When the cash itself is fictitious, only direct '
+                    'confirmation with banks and trustees finds it. This is the screen\'s deepest blind spot.</p></div>', unsafe_allow_html=True)
+        c2.markdown('<div class="card"><h4>Ricoh India (Sessions 12-13)</h4><p>The class case on financial shenanigans, with identifiable red flags in receivables and revenue. '
+                    'The company is delisted, so free data sources have no current statements.</p><p><b>Lesson:</b> apply the same Beneish indices (especially DSRI and SGI) to the case numbers by hand; '
+                    'that is exactly what the screen automates for living firms.</p></div>', unsafe_allow_html=True)
+        st.write("")
+        callout("<b>Design point:</b> the screen cannot test these two cases, and that is itself informative. Screens work on listed firms with available data and reported numbers; frauds that hide outside the statements, or firms that "
+                "have left the market, need other tools (confirmations, forensic accounting, regulator orders).", "warn")
+    else:
+        tk = C["tk"]; fy0, fy1 = C["w"]
+        section("The story", None)
+        for x in C["ctx"]: st.markdown("- " + x)
+        st.caption("Facts are regulator findings or allegations as recorded in class notes and public reports; some are under appeal. Verify against the original orders before quoting.")
+        W = A.window_stats(panel, tk, fy0, fy1)
+        section(f"What the screen sees (FY{fy0}-FY{fy1})", "Screener.in 10-year history, compared with the median non-financial firm over the same years.")
+        k = st.columns(4)
+        k[0].metric("Accruals / lagged assets", f"{W['acc']:.1%}", f"typical firm {W['acc_u']:.1%}", delta_color="off", help="Profit not backed by cash; higher = riskier")
+        k[1].metric("CFO / net income", "n/a" if pd.isna(W["cfo_ni"]) else f"{W['cfo_ni']:.2f}", f"typical firm {W['cfo_ni_u']:.2f}", delta_color="off", help="Below 1 = profit not turning into cash")
+        k[2].metric("Sales CAGR", f"{W['cagr']:.1%}")
+        rowc = yr[yr.ticker == tk]
+        k[3].metric(f"Risk score FY{fy}", "n/a" if rowc.empty or pd.isna(rowc.iloc[0].score_w) else f"{rowc.iloc[0].score_w:.0f}/100", None if rowc.empty or pd.isna(rowc.iloc[0].score_w) else str(rowc.iloc[0].tier_w), delta_color="off")
+        case_charts(tk, C["mark"])
+        if "claim" in C:
+            high_acc = W["acc"] > W["acc_u"] + 0.03 and (pd.isna(W["cfo_ni"]) or W["cfo_ni"] < 0.7 * W["cfo_ni_u"])
+            clean = W["acc"] <= W["acc_u"] + 0.02 and (not pd.isna(W["cfo_ni"])) and W["cfo_ni"] >= W["cfo_ni_u"]
+            expect_high = tk == "ZEEL.NS"
+            ok = high_acc if expect_high else clean
+            st.markdown(f"**Test of the class claim.** {C['claim']}")
+            callout(f"<b>Data (FY{fy0}-{fy1}):</b> accruals averaged <b>{W['acc']:.1%}</b> of assets vs <b>{W['acc_u']:.1%}</b> for the typical firm; CFO/NI averaged <b>{W['cfo_ni']:.2f}</b> vs <b>{W['cfo_ni_u']:.2f}</b>. "
+                    + ("✅ <b>The data support the class note.</b>" if ok else "⚠️ <b>The data do not clearly support the class note</b>; check the definitions and years."), "good" if ok else "warn")
+            if tk == "COFFEEDAY.NS":
+                dd = panel[(panel.ticker == tk) & panel.fy.isin([2016, 2019])].set_index("fy").debt
+                if {2016, 2019} <= set(dd.index): st.markdown(f"Debt rose from **₹{dd[2016]:,.0f} crore (FY2016)** to **₹{dd[2019]:,.0f} crore (FY2019)**, a {dd[2019] / dd[2016]:.1f}× increase, matching the class note that debt nearly doubled in three years.")
+        else:
+            st.markdown(f"**What to look for.** Over FY{fy0}-{fy1} accruals averaged **{W['acc']:.1%}** vs **{W['acc_u']:.1%}** typical, and CFO/NI **{W['cfo_ni']:.2f}** vs **{W['cfo_ni_u']:.2f}** typical. "
+                        "These are modest differences, not the extreme pattern seen in classic manipulation cases. This is what a statement-based screen can and cannot say.")
+        c1, c2 = st.columns(2)
+        c1.markdown("**Lesson**"); c1.info(C["lesson"])
+        c2.markdown("**What to check next**"); c2.markdown("\n".join("- " + x for x in C["nxt"]))
 
 # ------------------------------------------------------------------------------------------ TAB 4
 with t4:

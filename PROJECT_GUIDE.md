@@ -65,6 +65,12 @@ Stakeholder, universe, data, AI role. **Lesson:** decide this *before* touching 
 Dropdowns: year, cohort, sector, tier, company, metric, memo type. Sliders: top-N and model weights. Buttons: live refresh, CSV download. Five tabs: Screener · Deep-dive · Peer compare · AI memo · Method & validation.
 🧑 **Design test for your own dashboard:** can the stakeholder answer *"who do I look at first, and why?"* in 30 seconds?
 
+### Step 4b: Causal lens: DiD lab and Case lab (Sessions 15-16, 11-14)
+- 🤖 **DiD lab** (`src/analytics.py`): leads with a **forensic back-test** (do red-flagged firms really do worse afterwards? After a high-accrual flag, ROA falls ~1.7 pp more than for unflagged firms, t≈3.5; cash flow catches up: the Sloan accrual reversal). Then a calculator (2×2 DiD, triple DiD, RDD/DiDC) pre-loaded with end-term Question 1 (answers 400, 400, 800 reproduce exactly), plus an event study on 10 years of Screener data with firm-clustered standard errors and a **placebo test** for parallel trends.
+- 🤖 **Case lab:** TCS (class assignment), Infosys (Session 16 reading), Coffee Day, Zee, Reliance Infra, plus a card on why Wirecard and Ricoh cannot be tested. It *tests the class notes' claims* with data: Zee FY17-19 accruals 12.3% of assets vs -3.4% typical (CFO/NI 0.26 vs 1.39) supports the note; Coffee Day looks ordinary, as the note says.
+- 🧑 **Lessons:** (0) DiD does *not* tell you whether one firm cheated; it validates flags and evaluates rules/events at group level: say so in your report; (1) DiD needs a clear event, a credible control and parallel pre-trends: *always run the placebo*; (2) with few treated firms the result is descriptive, not statistical; (3) a case study is a test of your model: say where it fails (Wirecard-type cash fraud, hidden related-party advances); (4) tie each claim in your report to a number.
+- ⚠️ Case facts come from your class notes and public reports; verify against the original orders before quoting.
+
 ### Step 5: AI layer (`src/memo.py`, `data/ai_memos.json`)
 Three layers: rule-based text → Claude-drafted memos → live API option. The prompt **forbids any number not in the fact sheet** (anti-hallucination design). 🧑 Always label AI text as AI text and check it against filings.
 

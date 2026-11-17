@@ -223,6 +223,47 @@ def composite(df: pd.DataFrame) -> pd.DataFrame:
     df["score"] = (num / den).where(ok)                    # need core earnings-quality inputs, else "insufficient data"
     for k in c: df["s_" + k] = c[k]
     df["tier"] = pd.cut(df.score, [-1, 35, 50, 65, 101], labels=["Low", "Moderate", "Elevated", "High"])
+    blocks = ["s_" + k for k in WEIGHTS]
+    df["red_n"] = (df[blocks] >= 60).sum(axis=1).where(df.score.notna())          # independent tests in the red zone
+    df["red_of"] = df[blocks].notna().sum(axis=1).where(df.score.notna())
+    return df
+
+
+# ----------------------------------------------------------------------------- AI anomaly detector + priority index
+ANOM_FEATS = ["DSRI", "GMI", "AQI", "SGI", "DEPI", "SGAI", "LVGI", "TATA", "sloan", "DA", "REM", "lev", "roa", "cfo_cum_ni"]
+ANOM_NAMES = {"DSRI": "receivables vs sales", "GMI": "gross margin", "AQI": "asset quality", "SGI": "sales growth", "DEPI": "depreciation rate", "SGAI": "overheads",
+              "LVGI": "leverage change", "TATA": "total accruals", "sloan": "accruals", "DA": "discretionary accruals", "REM": "real earnings mgmt",
+              "lev": "leverage (debt/assets)", "roa": "return on assets", "cfo_cum_ni": "cash conversion"}
+
+
+def add_anomaly(df: pd.DataFrame) -> pd.DataFrame:
+    """Unsupervised Isolation Forest on the standardised forensic feature vector of every scored firm-year.
+    It needs no hand-set weights, so it is an independent second opinion on the rule-based score.
+    Also reports the two features that make each firm unusual (robust z-scores)."""
+    df = df.copy()
+    df["lev"] = (df.debt / df.ta).replace([np.inf, -np.inf], np.nan); df["roa"] = (df.ni / df.ta).replace([np.inf, -np.inf], np.nan)
+    X = df[ANOM_FEATS].replace([np.inf, -np.inf], np.nan)
+    ok = df.score.notna() & ~df.fin
+    Xo = X[ok]
+    lo, hi = Xo.quantile(.01), Xo.quantile(.99)
+    Xo = Xo.clip(lo, hi, axis=1)
+    med = Xo.median(); mad = ((Xo - med).abs().median() * 1.4826).replace(0, np.nan)
+    Z = ((Xo - med) / mad).clip(-8, 8).fillna(0.0)
+    try:
+        from sklearn.ensemble import IsolationForest
+        model = IsolationForest(n_estimators=400, random_state=7, contamination="auto").fit(Z)
+        raw = -model.score_samples(Z)
+    except Exception:                                                   # fallback if scikit-learn is unavailable
+        raw = Z.abs().mean(axis=1).values
+    df["anomaly_raw"] = np.nan; df.loc[ok, "anomaly_raw"] = raw
+    df["anomaly_pct"] = df.groupby("fy").anomaly_raw.rank(pct=True) * 100
+    drv = pd.Series("", index=df.index)
+    for i, row in Z.iterrows():
+        top = row.abs().sort_values(ascending=False).head(2)
+        drv[i] = ", ".join(f"{ANOM_NAMES[k]} {'high' if row[k] > 0 else 'low'}" for k in top.index if abs(row[k]) >= 1.5)
+    df["anomaly_drivers"] = drv
+    corr = (df.red_n / df.red_of).fillna(0)
+    df["fpi"] = (0.5 * df.score + 25 * corr + 0.25 * df.anomaly_pct).where(df.score.notna())   # Forensic Priority Index (default weights)
     return df
 
 
@@ -254,6 +295,7 @@ def run():
     w["benford_label"] = w.benford_mad.apply(lambda m: mad_label(m) if pd.notna(m) else np.nan)
 
     scored = pd.concat([composite(g) for _, g in w.groupby("fy")])
+    scored = add_anomaly(scored)
     keep = scored.drop(columns=[c for c in scored.columns if c.endswith("_l")])
     keep.to_csv(DATA / "metrics_year.csv", index=False)
     bdig.to_csv(DATA / "benford_digits.csv", index=False)
@@ -265,7 +307,8 @@ def run():
     rows = []
     nf, wl = latest[latest.cohort == "Nifty 50"], latest[latest.cohort == "Watchlist"]
     for col, lab in [("score", "Composite score"), ("MScore", "Beneish M"), ("sloan", "Sloan accruals"), ("DA", "Jones DA"),
-                     ("REM", "REM"), ("benford_mad", "Benford MAD"), ("s_Distress", "Distress (Altman)")]:
+                     ("REM", "REM"), ("benford_mad", "Benford MAD"), ("s_Distress", "Distress (Altman)"),
+                     ("anomaly_pct", "AI anomaly detector (Isolation Forest)"), ("fpi", "Forensic Priority Index (new)")]:
         rows.append(dict(metric=lab, AUC=auc(wl[col], nf[col]), watch_median=wl[col].median(), nifty_median=nf[col].median(),
                          n_watch=int(wl[col].notna().sum()), n_nifty=int(nf[col].notna().sum())))
     # composite without the distress overlay (so the test isn't driven only by obvious bankruptcy-type stress)

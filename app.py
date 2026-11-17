@@ -2,7 +2,7 @@
 FORENSIC EARNINGS-QUALITY SCREENER  -  dashboard for a forensic / fraud analyst
 Run:  .venv/bin/streamlit run app.py
 """
-import sys, re, json, subprocess, os, datetime as dt
+import sys, re, io, json, zipfile, subprocess, os, datetime as dt
 from pathlib import Path
 import numpy as np, pandas as pd, plotly.graph_objects as go, plotly.express as px
 import streamlit as st
@@ -14,6 +14,7 @@ if not (DATA / "metrics_year.csv").exists() and (ROOT / "metrics_year.csv").exis
 sys.path.insert(0, str(ROOT / "src"))
 import memo as M
 import analytics as A
+import decision as D
 from forensic_engine import WEIGHTS
 
 st.set_page_config(page_title="Forensic Earnings-Quality Screener", layout="wide", page_icon="🔍")
@@ -50,13 +51,26 @@ div[data-testid="stMetric"]{background:#fff;border:1px solid #e5e7eb;border-radi
 div[data-testid="stMetric"] *{color:#1f2937}
 div[data-testid="stMetricValue"]{font-size:1.55rem}
 div[data-testid="stMetric"] [data-testid="stMarkdownContainer"], div[data-testid="stMetric"] p, div[data-testid="stMetric"] label,
-div[data-testid="stMetricLabel"] *, div[data-testid="stMetricValue"] *, div[data-testid="stMetricDelta"] *{white-space:normal !important;overflow:visible !important;text-overflow:clip !important;overflow-wrap:anywhere;line-height:1.25}
+div[data-testid="stMetricLabel"] *, div[data-testid="stMetricValue"] *, div[data-testid="stMetricDelta"] *{white-space:normal !important;overflow:visible !important;text-overflow:clip !important;overflow-wrap:break-word;word-break:normal;line-height:1.25}
 .stTabs [data-baseweb="tab-list"]{gap:4px;border-bottom:1px solid #e5e7eb}
 .stTabs [data-baseweb="tab"]{font-weight:600;padding:8px 14px}
 h2,h3{color:#1f3a6e}
 .sec{font-size:18px;font-weight:700;color:#1f3a6e;margin:14px 0 2px}
 .sub{font-size:13.5px;color:#6b7280;margin:0 0 8px}
 .foot{font-size:12.5px;color:#6b7280;border-top:1px solid #e5e7eb;margin-top:26px;padding-top:10px}
+@media (max-width:1250px){div[data-testid="stMetricValue"]{font-size:1.3rem} div[data-testid="stMetricLabel"] *{font-size:.8rem !important}}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;margin:4px 0 10px}
+.kpis .k1{border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;background:#fff;color:#1f2937;box-shadow:0 1px 3px rgba(16,24,40,.06)}
+.kpis .k1 .l{font-size:13px;color:#4b5563;line-height:1.2}
+.kpis .k1 .v{font-size:28px;font-weight:700;color:#1f3a6e;line-height:1.15}
+.trio{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:4px 0 14px}
+.trio .cell{border:1px solid #e5e7eb;border-top:4px solid #2a6fdb;border-radius:10px;padding:12px 14px;background:#fff;color:#1f2937;font-size:14.5px;box-shadow:0 1px 3px rgba(16,24,40,.06)}
+.trio .k{font-size:11.5px;letter-spacing:.1em;color:#6b7280;font-weight:700;margin-bottom:4px}
+.acts{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:6px 0 12px}
+.acts .a{border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;background:#fff;color:#1f2937;font-size:13.5px;box-shadow:0 1px 3px rgba(16,24,40,.06)}
+.acts .a b.t{display:block;font-size:15px;margin-bottom:2px}
+.acts .a .n{font-size:26px;font-weight:700;color:#1f3a6e;line-height:1.1}
+@media (max-width:760px){.trio,.acts{grid-template-columns:1fr}}
 </style>""", unsafe_allow_html=True)
 
 
@@ -104,7 +118,7 @@ def stamp():
 
 # ------------------------------------------------------------------------------------------ sidebar
 st.sidebar.markdown("### 🔍 Filters")
-st.sidebar.info("New here? Open the **🏠 Start here** tab for a 2-minute guided tour.")
+st.sidebar.info("New here? The **🎯 Decision desk** answers the key questions in seconds. **ℹ️ Guide** has a walkthrough and glossary.")
 COOLDOWN_MIN = 30
 
 
@@ -148,8 +162,11 @@ w = pd.Series(W)
 den = sc.notna().mul(w).sum(axis=1)
 mall["score_w"] = np.where(mall.score.notna() & (den > 0), (sc * w).sum(axis=1, skipna=True) / den.replace(0, np.nan), np.nan)
 mall["tier_w"] = pd.cut(mall.score_w, [-1, 35, 50, 65, 101], labels=TIERS)
+# Forensic Priority Index: 50% risk score + 25% share of tests in the red zone + 25% AI anomaly percentile
+mall["fpi_w"] = np.where(mall.score_w.notna(), 0.5 * mall.score_w + 25 * (mall.red_n / mall.red_of).fillna(0) + 0.25 * mall.anomaly_pct.fillna(50), np.nan)
 
 yr = mall[mall.fy == fy].copy()
+yr = yr.join(pd.DataFrame([D.action_for(r_) for _, r_ in yr.iterrows()], index=yr.index, columns=["action", "why", "first"]))
 view = yr[yr.cohort.isin(cohorts)]
 if sec_sel: view = view[view.sector.isin(sec_sel)]
 scored = view[view.score_w.notna()]
@@ -158,6 +175,7 @@ peers = yr[~yr.fin]
 all_scored = yr[yr.score_w.notna()]
 lab = dict(zip(mall.ticker, mall.name))
 uni = pd.read_csv(DATA / "universe.csv")
+alerts_df = D.build_alerts(mall, fy)
 
 
 @st.cache_data
@@ -172,16 +190,17 @@ panel = panel_data("v1")
 st.markdown(f"""<div class="hero">
 <div class="eyebrow">FORENSIC ANALYTICS · EARNINGS-QUALITY SCREENING · INDIAN LISTED COMPANIES</div>
 <h1>Forensic Earnings-Quality Screener</h1>
-<p>Which listed Indian companies should a forensic analyst investigate first? This dashboard turns financial statements into
-red-flag scores using established forensic models, and explains every number in plain English.</p>
+<p>Decision support for forensic and credit-risk analysts: which listed Indian companies deserve an investigation this quarter, why, and what to check first. Six forensic tests and an AI anomaly detector feed one Forensic Priority Index.</p>
 <span class="pill">📅 Data as of {stamp()[:10]}</span><span class="pill">🏢 {yr.ticker.nunique()} companies</span>
 <span class="pill">✅ {len(all_scored)} scored (FY{fy})</span><span class="pill">🌐 Live sources: NSE · Yahoo Finance · Screener.in</span>
 </div>""", unsafe_allow_html=True)
 
-t0, t1, t2, t3, tdid, tcase, t4, t5 = st.tabs(["🏠 Start here", "📊 Universe screener", "🏢 Company deep-dive", "⚖️ Peer comparison", "🧪 Back-test & DiD", "📚 Case lab", "🤖 AI analyst memo", "📘 Method & validation"])
+tdesk, t1, t2, t3, tai, tval, tmeth, tguide = st.tabs(["🎯 Decision desk", "📊 Triage board", "🏢 Company brief", "⚖️ Compare", "🤖 AI analyst", "🧪 Validation & cases", "📘 Method & data", "ℹ️ Guide"])
+with tval:
+    tdid, tcase = st.tabs(["🧪 History test & DiD", "📚 Case studies"])
 
 # ------------------------------------------------------------------------------------------ TAB 0: START HERE
-with t0:
+with tguide:
     section("What is this?", "A screening tool for a forensic / fraud analyst, who has far more companies than time to read every annual report.")
     callout("<b>The idea:</b> accounting manipulation leaves fingerprints in the numbers (profits without cash, receivables growing faster than sales, "
             "unnatural digit patterns). We measure six fingerprints for each company, combine them into a <b>0-100 risk score</b>, and rank companies so the analyst "
@@ -189,9 +208,9 @@ with t0:
 
     section("How to use it: three steps")
     c1, c2, c3 = st.columns(3)
-    c1.markdown('<div class="card"><h4><span class="num">1</span>Screen</h4><p>Open <b>📊 Universe screener</b>. See every company ranked by risk score. Use the sidebar to filter by year, sector, cohort or tier.</p></div>', unsafe_allow_html=True)
-    c2.markdown('<div class="card"><h4><span class="num">2</span>Investigate</h4><p>Open <b>🏢 Company deep-dive</b>. Pick a company to see <i>why</i> it scored high: which tests fired, how it compares to peers, profit versus cash.</p></div>', unsafe_allow_html=True)
-    c3.markdown('<div class="card"><h4><span class="num">3</span>Explain</h4><p>Open <b>🤖 AI analyst memo</b> for a short written risk memo with next audit steps. Then <b>📘 Method &amp; validation</b> shows how reliable the screen is.</p></div>', unsafe_allow_html=True)
+    c1.markdown('<div class="card"><h4><span class="num">1</span>Triage</h4><p>Start at <b>🎯 Decision desk</b>: the priority queue, alerts and recommended actions. <b>📊 Triage board</b> lists every company; use the sidebar to filter.</p></div>', unsafe_allow_html=True)
+    c2.markdown('<div class="card"><h4><span class="num">2</span>Investigate</h4><p>Open <b>🏢 Company brief</b> to see <i>why</i> a company ranks where it does: tests that fired, peers, profit versus cash, closest twins and the full calculation.</p></div>', unsafe_allow_html=True)
+    c3.markdown('<div class="card"><h4><span class="num">3</span>Explain and trust</h4><p><b>🤖 AI analyst</b> writes a memo and shows how AI was checked. <b>🧪 Validation &amp; cases</b> and <b>📘 Method &amp; data</b> show how reliable the screen is.</p></div>', unsafe_allow_html=True)
 
     st.write("")
     left, right = st.columns([1, 1])
@@ -221,14 +240,14 @@ with t0:
 
     section("Suggested 2-minute walkthrough")
     st.markdown(
-        "1. **📊 Universe screener**: in the sidebar set *Cohort* to **Watchlist**. Which known-troubled firms does the model flag? Hover over a bar for details.\n"
-        "2. **🏢 Company deep-dive**: choose **PC Jeweller**. Read the verdict banner, then see where its Beneish bars rise above the peer median and how profit compares with operating cash.\n"
-        "3. **⚖️ Peer comparison**: keep the default firms (Zee, Coffee Day, Reliance Infra, TCS) and switch the metric to *Beneish M-score* or *CFO / Net income*.\n"
-        "4. **🤖 AI analyst memo**: pick PC Jeweller and flip between *Rule-based* and *Claude-drafted*. Open *Fact sheet* to see exactly which numbers the AI was allowed to use.\n"
-        "5. **Sidebar what-if**: open *Adjust model weights*, set *Distress* to 0, and watch the ranking change. This shows the score is a judgement, not a law of nature.\n"
-        "6. **🧪 Back-test & DiD**: start with the history test: do firms flagged for high accruals really see profits fall afterwards? Then try the event study with your own exposed and comparison firms.\n"
-        "7. **📚 Case lab**: open *Café Coffee Day* or *Zee* to see how the screen performs on known cases, for example whether Zee's FY17-19 accruals really were high.\n"
-        "8. **📘 Method & validation**: read the back-test and the data cross-check, including the limitations.\n"
+        "1. **🎯 Decision desk**: read the three boxes (who, problem, decision), then the priority queue. Which firms are marked Investigate, and why?\n"
+        "2. **📊 Triage board**: in the sidebar set *Cohort* to **Watchlist**. Does the model flag the known-troubled firms? Switch *Rank by* between the priority index and the plain risk score.\n"
+        "3. **🏢 Company brief**: choose **PC Jeweller**. Read the recommended action, see which Beneish bars rise above peers, then open *Show the calculation* to verify the M-score by hand.\n"
+        "4. **⚖️ Compare**: keep the default firms and switch the metric to *Beneish M-score* or *CFO / Net income*.\n"
+        "5. **🤖 AI analyst**: open a Claude-drafted memo and read the grounding check; then *How reliability was checked*.\n"
+        "6. **Sidebar what-if**: open *Adjust model weights*, set *Distress* to 0, and watch the priority queue change. The score is a judgement, not a law of nature.\n"
+        "7. **🧪 Validation & cases**: start with the history test (do high-accrual firms see profits fall afterwards?), then open a case such as *Café Coffee Day* or *Zee*.\n"
+        "8. **📘 Method & data**: read the back-test and download the audit pack.\n"
         "9. **⟳ Refresh live data** (sidebar) re-downloads the latest statements from NSE and Yahoo Finance (about 3 minutes).")
 
     with st.expander("📖 Glossary: what each test means in plain English"):
@@ -246,14 +265,95 @@ with t0:
 | **CFO / NI** | Operating cash flow divided by net income over 3 years | well below 1 (profit not turning into cash) |
 | **Benford's law** | In natural numbers, about 30% start with digit 1 and 4.6% with 9. Made-up numbers drift from this | MAD above 0.015 = non-conformity (weak signal by itself) |
 | **DiD / triple DiD** | (Forensic use: does a red flag predict later trouble, or did a rule change earnings quality?) Compares the change in an exposed group with the change in a similar, unexposed comparison group; triple DiD adds a second split | Result only credible if pre-event trends were parallel (check the placebo) |
+| **Forensic Priority Index (FPI)** | The new decision metric: 50% risk score + 25% share of tests in the red zone + 25% AI anomaly percentile | Higher = investigate sooner |
+| **AI anomaly percentile** | How unusual a company's whole fingerprint is vs peers, from an unsupervised Isolation Forest | 90 or higher = statistical outlier |
+| **Grounding check** | Automatic test that every number in an AI memo appears in the fact sheet | Any number not traced is flagged |
 | **Altman Z″** | Bankruptcy-risk score (emerging-market version) | below 4.15 = distress, which raises the incentive to manipulate |
 """)
     callout("<b>Important:</b> this is a screening tool for triage, not a verdict engine. Flags can have innocent explanations (mergers, demergers, new accounting standards, one-off items). "
             "Never treat a flag as proof of wrongdoing; the AI memos list benign explanations to check first.", "warn")
 
+# ------------------------------------------------------------------------------------------ TAB: DECISION DESK
+ACT_COL = {"Investigate": "#08306b", "Review": "#2171b5", "Monitor": "#6baed6", "Routine": "#c6dbef", "Not scored": "#d1d5db", "Insufficient data": "#d1d5db"}
+snm = lambda n: str(n).replace(" Limited", "").replace(" Ltd.", "")
+with tdesk:
+    sv = view[view.score_w.notna()].sort_values("fpi_w", ascending=False)
+    counts = view.action.value_counts()
+    st.markdown('''<div class="trio">
+<div class="cell"><div class="k">WHO USES THIS</div>A forensic or credit-risk analyst at a lender, audit firm or investor, covering listed Indian companies.</div>
+<div class="cell"><div class="k">THE PROBLEM</div>Hundreds of filings, a few analyst-days. Reported profit can hide weak cash backing, aggressive accruals or distress, and any single ratio gives false alarms.</div>
+<div class="cell"><div class="k">THE DECISION</div><b>Which companies get a forensic review this quarter, and what to check first.</b></div></div>''', unsafe_allow_html=True)
+    st.caption(f"**What you are looking at:** {len(view)} listed Indian companies (FY{fy}), each run through six forensic tests and an AI anomaly detector, then ranked by the **Forensic Priority Index (FPI)**. Filters on the left apply to every page.")
+
+    section("1 · How is the universe doing?", "Where each company lands after the tests, the AI detector and the action rules.")
+    kp = [("🔴 Investigate", counts.get("Investigate", 0), D.MEANING["Investigate"]), ("🟠 Review", counts.get("Review", 0), D.MEANING["Review"]), ("🟡 Monitor", counts.get("Monitor", 0), D.MEANING["Monitor"]),
+          ("🟢 Routine", counts.get("Routine", 0), D.MEANING["Routine"]), ("⚪ Not scored", counts.get("Not scored", 0) + counts.get("Insufficient data", 0), "Banks, NBFCs, insurers (different business model) and firms with missing data")]
+    st.markdown('<div class="kpis">' + "".join(f'<div class="k1" title="{t}"><div class="l">{l}</div><div class="v">{int(v)}</div></div>' for l, v, t in kp) + "</div>", unsafe_allow_html=True)
+
+    if sv.empty:
+        callout("No scored companies match the current filters. Widen the sidebar filters.", "warn")
+    else:
+        section("2 · Where are the risks?", "The ten highest-priority companies, and which sectors concentrate the risk.")
+        a, b = st.columns([3, 2])
+        top8 = sv.head(10).iloc[::-1]
+        f = go.Figure(go.Bar(x=top8.fpi_w, y=[snm(n) for n in top8.name], orientation="h", marker_color=[ACT_COL[x] for x in top8.action], text=top8.action, textposition="inside",
+                             insidetextfont=dict(color="white", size=11), customdata=np.c_[top8.score_w.round(0), top8.red_n, top8.red_of, top8.anomaly_pct.round(0)],
+                             hovertemplate="<b>%{y}</b><br>Priority index %{x:.0f}<br>Risk score %{customdata[0]} · %{customdata[1]:.0f} of %{customdata[2]:.0f} tests red · AI outlier percentile %{customdata[3]}<extra></extra>"))
+        f.update_layout(title="Top 10 by Forensic Priority Index", xaxis_title="Priority index (0–100)")
+        a.plotly_chart(style(f, 400), width="stretch", config=PCFG)
+        a.caption("**How to read:** longer bar = higher investigation priority. The label inside each bar is the recommended action.")
+        hs = sv.groupby("sector").fpi_w.agg(["mean", "count"]); hs = hs[hs["count"] >= 2].sort_values("mean")
+        if len(hs):
+            f = go.Figure(go.Bar(x=hs["mean"], y=hs.index, orientation="h", marker_color=BLUE, text=[f"n={int(c)}" for c in hs["count"]], textposition="outside"))
+            f.update_layout(title="Average priority index by sector", xaxis=dict(range=[0, max(100, hs['mean'].max() + 15)], title="Average priority index"))
+            b.plotly_chart(style(f, 400), width="stretch", config=PCFG)
+            b.caption("**How to read:** sectors with at least two scored firms. A high bar means the whole sector carries more red flags.")
+
+        section("3 · What deserves investigation first?", "Your queue: highest priority first, with the reason and the first documents to check.")
+        cap = st.slider("Reviews your team can take on this quarter", 3, 20, 8, key="cap", help="Sets the length of your investigation list below")
+        q = sv.head(cap).copy(); q["Action"] = q.action.map(lambda x: f"{D.ICON[x]} {x}")
+        q = q.rename(columns={"name": "Company", "fpi_w": "Priority index", "why": "Why", "first": "Check first"})[["Company", "Action", "Priority index", "Why", "Check first"]]
+        st.dataframe(q, hide_index=True, width="stretch", height=min(390, 38 * len(q) + 40), column_config={"Priority index": st.column_config.ProgressColumn("Priority index", min_value=0, max_value=100, format="%.0f"),
+                     "Why": st.column_config.TextColumn(width="medium"), "Check first": st.column_config.TextColumn(width="large")})
+        callout(f"<b>Your investigation list for this quarter ({cap} reviews):</b> " + ", ".join(snm(n) for n in q["Company"]) + ". Everything below the cut-off stays on desk review or monitoring.", "good")
+        st.caption("Open **🏢 Company brief** for the full evidence on any firm, and **🤖 AI analyst** for a written memo.")
+
+        section("4 · What should I do?", "The action bands turn the priority index into a decision. Each company gets exactly one action.")
+        nm = lambda a_: ", ".join(snm(n) for n in sv[sv.action == a_].name.head(4)) + ("…" if (sv.action == a_).sum() > 4 else "") or "none"
+        st.markdown(f'''<div class="acts">
+<div class="a"><b class="t">🔴 Investigate · <span class="n">{int(counts.get("Investigate", 0))}</span></b>{D.MEANING["Investigate"]}<br><i style="color:#6b7280">{nm("Investigate")}</i></div>
+<div class="a"><b class="t">🟠 Review · <span class="n">{int(counts.get("Review", 0))}</span></b>{D.MEANING["Review"]}<br><i style="color:#6b7280">{nm("Review")}</i></div>
+<div class="a"><b class="t">🟡 Monitor · <span class="n">{int(counts.get("Monitor", 0))}</span></b>{D.MEANING["Monitor"]}<br><i style="color:#6b7280">{nm("Monitor")}</i></div>
+<div class="a"><b class="t">🟢 Routine · <span class="n">{int(counts.get("Routine", 0))}</span></b>{D.MEANING["Routine"]}<br><i style="color:#6b7280">{nm("Routine")}</i></div></div>''', unsafe_allow_html=True)
+        st.caption("**Rule:** the action follows the priority index: **65 or more = Investigate, 50 to 65 = Review, 35 to 50 = Monitor, below 35 = Routine.** The index already blends the risk score, how many tests agree, and the AI outlier percentile.")
+
+        section("5 · What changed since last year?", "Alerts generated automatically from year-on-year movements.")
+        al = alerts_df[alerts_df.ticker.isin(view.ticker)] if len(alerts_df) else alerts_df
+        if len(al):
+            n_hi = int((al.severity == "High").sum())
+            show = al.copy(); show["Severity"] = show.severity.map({"High": "🔴 High", "Medium": "🟠 Medium", "Low": "⚪ Low"})
+            show = show.rename(columns={"name": "Company", "alert": "Alert", "action": "Suggested action"})[["Severity", "Company", "Alert", "Suggested action"]]
+            st.dataframe(show.head(8), hide_index=True, width="stretch", height=330)
+            with st.expander(f"All {len(al)} alerts"):
+                st.dataframe(show, hide_index=True, width="stretch")
+        else:
+            n_hi = 0; st.info("No alerts for the current selection.")
+
+        clean = sv[(sv.action == "Routine") & (sv.red_n == 0)].sort_values("fpi_w").head(5)
+        if len(clean): callout("<b>Where effort can be saved:</b> the cleanest earnings profiles (no test in the red zone) are " + ", ".join(snm(n) for n in clean.name) + ". Routine monitoring is enough.", "good")
+
+        out = sv[sv.anomaly_pct >= 90]; dis = out[out.tier_w.isin(["Low", "Moderate"])]; t1_ = sv.iloc[0]
+        brief = (f"In FY{fy}, <b>{int(counts.get('Investigate', 0) + counts.get('Review', 0))}</b> of {len(sv)} scored companies need action: <b>{int(counts.get('Investigate', 0))}</b> to investigate and <b>{int(counts.get('Review', 0))}</b> for desk review. "
+                 f"<b>{snm(t1_['name'])}</b> leads the queue (priority index {t1_.fpi_w:.0f}; {int(t1_.red_n)} of {int(t1_.red_of)} tests in the red zone"
+                 + (f"; unusual on {t1_.anomaly_drivers}" if isinstance(t1_.anomaly_drivers, str) and t1_.anomaly_drivers else "") + "). "
+                 + (f"The AI detector rates <b>{len(out)}</b> companies as statistical outliers; <b>{len(dis)}</b> of them ({', '.join(snm(n) for n in dis.name.head(3))}) score only Low or Moderate on the rules, so they deserve a second look. " if len(out) and len(dis) else "")
+                 + f"There are <b>{n_hi}</b> high-severity alerts versus last year. Treat this as triage and confirm with documents before concluding anything.")
+        callout("<b>🤖 AI briefing (auto-generated from the numbers above):</b> " + brief)
+        st.caption("The priority index = 50% risk score + 25% share of tests in the red zone + 25% AI anomaly percentile. See *Method & data* for the formula and its back-test.")
+
 # ------------------------------------------------------------------------------------------ TAB 1
 with t1:
-    section("Universe screener", f"All companies ranked by composite risk score, FY{fy}. Filters in the sidebar apply here.")
+    section("Triage board", f"All companies ranked for FY{fy}. Rank by the Forensic Priority Index (risk score + agreement between tests + AI anomaly) or by the plain risk score.")
     c = st.columns(5)
     c[0].metric("Companies in view", len(view))
     c[1].metric("Scored", len(scored), help="Banks/NBFCs/insurers and firms with insufficient data are not scored")
@@ -270,14 +370,16 @@ with t1:
             vc = hi.sector.value_counts(); sec_txt = f" The most common sector among them is <b>{vc.index[0]}</b> ({vc.iloc[0]})."
         callout(f"<b>Takeaway:</b> {len(hi)} of {len(scored)} scored companies are High or Elevated.{sec_txt} "
                 f"Highest: <b>{scored.sort_values('score_w', ascending=False).iloc[0]['name']}</b> ({scored.score_w.max():.0f}/100).")
+        rank_by = st.radio("Rank by", ["Forensic Priority Index", "Risk score"], horizontal=True, key="rank_by")
+        rk, rk_lab = ("fpi_w", "Forensic Priority Index") if rank_by.startswith("Forensic") else ("score_w", "Risk score")
         n = st.slider("Show top N companies", 5, max(6, len(scored_tier)), min(20, max(6, len(scored_tier))))
-        top = scored_tier.sort_values("score_w", ascending=False).head(n).iloc[::-1]
-        fig = go.Figure(go.Bar(x=top.score_w, y=top.ticker.str.replace(".NS", ""), orientation="h",
+        top = scored_tier.sort_values(rk, ascending=False).head(n).iloc[::-1]
+        fig = go.Figure(go.Bar(x=top[rk], y=top.ticker.str.replace(".NS", ""), orientation="h",
                                marker_color=[TIER_COL[str(t)] for t in top.tier_w],
                                marker_line=dict(color=[COH_COL[x] for x in top.cohort], width=2),
                                customdata=np.c_[top.name, top.tier_w, top.cohort, top.MScore.round(2)],
                                hovertemplate="<b>%{customdata[0]}</b><br>Score %{x:.0f} (%{customdata[1]})<br>%{customdata[2]} · Beneish %{customdata[3]}<extra></extra>"))
-        fig.update_layout(title="Composite forensic risk score", xaxis_title="Risk score (0–100)")
+        fig.update_layout(title=rk_lab, xaxis_title=rk_lab + " (0–100)")
         st.plotly_chart(style(fig, max(320, 22 * len(top) + 80)), width="stretch", config=PCFG)
         st.caption("**How to read:** longer bar = more red flags. Bar **fill** shows the risk tier (darker = higher). Bar **outline** shows the cohort (blue = Nifty 50, orange = Watchlist).")
 
@@ -298,33 +400,34 @@ with t1:
         b.plotly_chart(style(f3), width="stretch", config=PCFG)
         b.caption("**How to read:** if the model works, the orange Watchlist bars should lean towards the higher tiers.")
 
-    section("Screening table", "Sortable (click a column header). The progress bar shows the risk score.")
-    d = view.copy(); d["Risk"] = [("⚪ not scored" if pd.isna(t) else f"{TIER_ICON[str(t)]} {t}") for t in d.tier_w]
-    tbl = d.sort_values("score_w", ascending=False)[["name", "sector", "cohort", "score_w", "Risk", "MScore", "sloan", "DA", "REM", "cfo_cum_ni", "Altman", "benford_label"]].rename(
-        columns={"name": "Company", "sector": "Sector", "cohort": "Cohort", "score_w": "Risk score", "MScore": "Beneish M", "sloan": "Sloan accruals", "DA": "Jones DA",
-                 "REM": "REM index", "cfo_cum_ni": "CFO/NI (3y)", "Altman": "Altman Z″", "benford_label": "Benford"})
-    st.dataframe(tbl, width="stretch", hide_index=True, height=400, column_config={
+    section("Triage table", "Sortable (click a column header). Default order: highest Forensic Priority Index first.")
+    d = view.copy(); d["Action"] = d.action.map(lambda x: f"{D.ICON[x]} {x}"); d["Tests red"] = [("" if pd.isna(a_) else f"{int(a_)} of {int(b_)}") for a_, b_ in zip(d.red_n, d.red_of)]
+    tbl = d.sort_values("fpi_w", ascending=False)[["name", "sector", "cohort", "Action", "fpi_w", "score_w", "Tests red", "anomaly_pct", "MScore", "sloan", "cfo_cum_ni", "Altman", "benford_label"]].rename(
+        columns={"name": "Company", "sector": "Sector", "cohort": "Cohort", "fpi_w": "Priority index", "score_w": "Risk score", "anomaly_pct": "AI outlier %ile", "MScore": "Beneish M", "sloan": "Sloan accruals",
+                 "cfo_cum_ni": "CFO/NI (3y)", "Altman": "Altman Z″", "benford_label": "Benford"})
+    st.dataframe(tbl, width="stretch", hide_index=True, height=420, column_config={
+        "Priority index": st.column_config.ProgressColumn("Priority index", min_value=0, max_value=100, format="%.0f", help="50% risk score + 25% share of tests in red zone + 25% AI anomaly percentile"),
         "Risk score": st.column_config.ProgressColumn("Risk score", min_value=0, max_value=100, format="%.0f"),
+        "AI outlier %ile": st.column_config.NumberColumn(format="%.0f", help="How unusual the firm's whole fingerprint is vs peers (Isolation Forest). 90+ = outlier"),
         "Beneish M": st.column_config.NumberColumn(format="%.2f", help="Above −1.78 = likely manipulator"),
         "Sloan accruals": st.column_config.NumberColumn(format="%.3f", help="Profit not backed by cash, scaled by assets"),
-        "Jones DA": st.column_config.NumberColumn(format="%.3f"), "REM index": st.column_config.NumberColumn(format="%.3f"),
         "CFO/NI (3y)": st.column_config.NumberColumn(format="%.2f", help="Below ~0.8 = profits not turning into cash"),
         "Altman Z″": st.column_config.NumberColumn(format="%.1f", help="Below 4.15 = distress zone")})
-    st.download_button("⬇ Download table (CSV)", tbl.to_csv(index=False), f"forensic_screen_FY{fy}.csv")
+    st.download_button("⬇ Download table (CSV)", tbl.to_csv(index=False), f"forensic_triage_FY{fy}.csv")
     if view.fin.any():
         callout(f"{int(view.fin.sum())} financial-sector firms (banks, NBFCs, insurers) are <b>not scored</b>: these tests assume receivables, inventory and an operating cycle. "
                 "This is a deliberate design choice, not missing data.")
 
 # ------------------------------------------------------------------------------------------ TAB 2
 with t2:
-    section("Company deep-dive", "Pick a company to see why it scored the way it did.")
+    section("Company brief", "Pick a company to see why it ranks where it does, what to do about it, and the evidence behind every number.")
     opts = view.sort_values("name")
     label = {r_.ticker: f"{r_['name']} ({r_.ticker.replace('.NS', '')})" for _, r_ in opts.iterrows()}
     if not label:
         callout("No companies match the sidebar filters.", "warn")
     else:
         keys = list(label)
-        tk = st.selectbox("Company", keys, format_func=label.get, index=keys.index("PCJEWELLER.NS") if "PCJEWELLER.NS" in keys else 0)
+        tk = st.selectbox("Company", keys, format_func=label.get, index=keys.index("PCJEWELLER.NS") if "PCJEWELLER.NS" in keys else 0, key="brief_co")
         hist = mall[mall.ticker == tk].sort_values("fy")
         rr = hist[hist.fy == fy]
         if rr.empty:
@@ -340,12 +443,15 @@ with t2:
             sig = next((md2html(l) for l in lines if l.startswith("**Signals raised")), "")
             st.markdown(f'<div class="verdict" style="border-left-color:{border}"><div class="big">{body}</div><div>{sig}</div></div>', unsafe_allow_html=True)
 
-            c = st.columns(5)
+            act, why_, first_ = D.action_for(r)
+            st.markdown(f'<div class="verdict" style="border-left-color:{ACT_COL.get(act, "#9ca3af")}"><div class="big">{D.ICON[act]} Recommended action: {act}</div><div>{D.MEANING[act]} <i>Why:</i> {why_}.<br><b>Check first:</b> {first_}.</div></div>', unsafe_allow_html=True)
+            c = st.columns(6)
             c[0].metric("Risk score", "n/a" if pd.isna(r.score_w) else f"{r.score_w:.0f}/100", None if pd.isna(r.score_w) else str(r.tier_w), delta_color="off")
-            c[1].metric("Beneish M", "n/a" if pd.isna(r.MScore) else f"{r.MScore:.2f}", r.MScore_flag if pd.notna(r.MScore) else None, delta_color="off", help="Above −1.78 = likely manipulator")
+            c[1].metric("Beneish M", "n/a" if pd.isna(r.MScore) else f"{r.MScore:.2f}", {"Likely manipulator": "Flag", "Watch": "Watch", "Unlikely": "Clear"}.get(r.MScore_flag, r.MScore_flag) if pd.notna(r.MScore) else None, delta_color="off", help="Above −1.78 = likely manipulator (Flag); −2.22 to −1.78 = Watch; below −2.22 = Clear")
             c[2].metric("Altman Z″", "n/a" if pd.isna(r.Altman) else f"{r.Altman:.1f}", None if pd.isna(r.Altman) else str(r.Altman_zone), delta_color="off", help="Bankruptcy-risk score; below 4.15 = distress")
             c[3].metric("Benford", "n/a" if pd.isna(r.benford_mad) else str(r.benford_label), f"MAD {r.benford_mad:.4f}" if pd.notna(r.benford_mad) else None, delta_color="off", help="Do leading digits follow the natural pattern?")
             c[4].metric("CFO / NI (3-yr)", "n/a" if pd.isna(r.cfo_cum_ni) else f"{r.cfo_cum_ni:.2f}", help="Operating cash flow ÷ net income. Well below 1 = profit not turning into cash")
+            c[5].metric("Priority index", "n/a" if pd.isna(r.fpi_w) else f"{r.fpi_w:.0f}/100", None if pd.isna(r.anomaly_pct) else f"AI outlier {r.anomaly_pct:.0f}th pct", delta_color="off", help="50% risk score + 25% share of tests in red zone + 25% AI anomaly percentile")
 
             a, b = st.columns(2)
             comps = ["DSRI", "GMI", "AQI", "SGI", "DEPI", "SGAI", "LVGI"]
@@ -356,7 +462,7 @@ with t2:
             f.add_hline(y=1, line_dash="dot", line_color=MUTED, annotation_text="1.0 = no change")
             f.update_layout(title="Beneish indices vs peers", barmode="group")
             a.plotly_chart(style(f), width="stretch", config=PCFG)
-            a.caption("**How to read:** each bar is a year-on-year change. Above the dotted **1.0** line = deteriorating. Blue well above grey = this firm is worse than peers on that test (see Glossary in *Start here*).")
+            a.caption("**How to read:** each bar is a year-on-year change. Above the dotted **1.0** line = deteriorating. Blue well above grey = this firm is worse than peers on that test (see the *Guide* tab).")
             f = go.Figure()
             usd = str(r.get("currency")) == "USD"; div, unit = (1e6, "USD million") if usd else (1e7, "₹ crore")
             f.add_bar(name="Net income", x=hist.fy, y=hist.ni / div, marker_color=BLUE)
@@ -386,6 +492,44 @@ with t2:
                 show.index = ["Net margin", "Asset turnover", "Equity multiplier", "ROE", "ROCE", "Current ratio", "Debt / equity", "Interest cover", "Receivable days", "Inventory days", "Beneish M", "Sloan accruals", "Jones DA"]
                 st.dataframe(show.round(3), width="stretch")
                 st.caption("ROE = net margin × asset turnover × equity multiplier (DuPont). Missing values mean the line item is not reported for that company.")
+
+            section("Closest financial twins", "Companies with the most similar forensic fingerprint (nearest-neighbour matching): the fairest comparison group.")
+            FEAT = ["DSRI", "GMI", "AQI", "SGI", "DEPI", "SGAI", "LVGI", "TATA", "sloan", "DA", "REM", "lev", "roa", "cfo_cum_ni"]
+            fx = peers[peers.score_w.notna()].set_index("ticker").copy(); fx["lev"] = fx.debt / fx.ta; fx["roa"] = fx.ni / fx.ta
+            X_ = fx[FEAT].replace([np.inf, -np.inf], np.nan); X_ = X_.clip(X_.quantile(.05), X_.quantile(.95), axis=1); Z_ = ((X_ - X_.mean()) / X_.std()).fillna(0)
+            if tk in Z_.index:
+                dist = (((Z_ - Z_.loc[tk]) ** 2).sum(axis=1) ** .5).drop(tk).nsmallest(3)
+                tw = fx.loc[dist.index, ["name", "sector", "fpi_w", "action"]].reset_index(drop=True).assign(Distance=dist.round(2).values)
+                tw["action"] = tw.action.map(lambda x: f"{D.ICON[x]} {x}")
+                st.dataframe(tw.rename(columns={"name": "Company", "sector": "Sector", "fpi_w": "Priority index", "action": "Action", "Distance": "Distance (smaller = more alike)"}), hide_index=True, width="stretch",
+                             column_config={"Priority index": st.column_config.NumberColumn(format="%.0f")})
+            else:
+                st.caption("Twins are available for scored non-financial companies.")
+
+            with st.expander("🔍 Show the calculation: Beneish M-score, step by step"):
+                rp_ = hist[hist.fy == fy - 1]
+                if bool(r.fin) or rp_.empty or pd.isna(r.MScore):
+                    st.info("Needs a scored non-financial company with the previous year's statements.")
+                else:
+                    p_ = rp_.iloc[0]; dv = 1e6 if usd else 1e7; un = "USD m" if usd else "₹ crore"
+                    nm_ = {"sales": "Sales", "cogs": "Cost of sales", "sga": "SG&A", "dep": "Depreciation", "recv": "Receivables", "ppe": "Net PPE", "ca": "Current assets", "ta": "Total assets",
+                           "cl": "Current liabilities", "ltd": "Long-term debt", "ni": "Net income", "cfo": "Operating cash flow"}
+                    st.dataframe(pd.DataFrame({"Input": list(nm_.values()), f"FY{fy - 1} ({un})": [p_[k] / dv for k in nm_], f"FY{fy} ({un})": [r[k] / dv for k in nm_]}).round(1), hide_index=True, width="stretch")
+                    sd = lambda a, b: a / b if b not in (0, None) and pd.notna(b) and pd.notna(a) else np.nan
+                    idx_ = {"DSRI": sd(sd(r.recv, r.sales), sd(p_.recv, p_.sales)), "GMI": sd(sd(p_.sales - p_.cogs, p_.sales), sd(r.sales - r.cogs, r.sales)),
+                            "AQI": sd(1 - sd(r.ca + r.ppe, r.ta), 1 - sd(p_.ca + p_.ppe, p_.ta)), "SGI": sd(r.sales, p_.sales),
+                            "DEPI": sd(sd(p_.dep, p_.dep + p_.ppe), sd(r.dep, r.dep + r.ppe)), "SGAI": sd(sd(r.sga, r.sales), sd(p_.sga, p_.sales)),
+                            "LVGI": sd(sd(r.cl + r.ltd, r.ta), sd(p_.cl + p_.ltd, p_.ta)), "TATA": sd(r.ni - r.cfo, r.ta)}
+                    meaning = {"DSRI": "Receivables vs sales", "GMI": "Gross-margin deterioration", "AQI": "Share of assets that are not cash/plant", "SGI": "Sales growth", "DEPI": "Depreciation rate slowing",
+                               "SGAI": "Overheads vs sales", "LVGI": "Leverage change", "TATA": "Accruals: (profit − operating cash) ÷ assets"}
+                    coef = {"DSRI": 0.920, "GMI": 0.528, "AQI": 0.404, "SGI": 0.892, "DEPI": 0.115, "SGAI": -0.172, "LVGI": -0.327, "TATA": 4.679}
+                    used_ = {k: (0.0 if k == "TATA" else 1.0) if pd.isna(v) else float(np.clip(v, -0.5, 0.5) if k == "TATA" else np.clip(v, 0.2, 5)) for k, v in idx_.items()}
+                    m_calc = -4.84 + sum(coef[k] * used_[k] for k in coef)
+                    st.dataframe(pd.DataFrame({"Index": list(idx_), "Meaning": [meaning[k] for k in idx_], "Value": [idx_[k] for k in idx_], "Used (capped)": [used_[k] for k in idx_],
+                                               "Coefficient": [coef[k] for k in idx_], "Contribution": [coef[k] * used_[k] for k in idx_]}).round(3), hide_index=True, width="stretch")
+                    ok_ = abs(m_calc - r.MScore) < 1e-6
+                    st.markdown(f"**M = −4.84 + Σ contributions = {m_calc:.3f}**  ·  engine value {r.MScore:.3f}  ·  " + ("✅ recalculation matches" if ok_ else "⚠️ differs (a missing index was set to neutral)"))
+                    st.caption("Any index that cannot be computed is set to neutral (1, or 0 for TATA); indices are capped to [0.2, 5] and TATA to [−0.5, 0.5]. Flag if M is above −1.78.")
 
 # ------------------------------------------------------------------------------------------ TAB 3
 with t3:
@@ -695,41 +839,128 @@ with tcase:
         c1.markdown("**Lesson**"); c1.info(C["lesson"])
         c2.markdown("**What to check next**"); c2.markdown("\n".join("- " + x for x in C["nxt"]))
 
-# ------------------------------------------------------------------------------------------ TAB 4
-with t4:
-    section("AI analyst memo", "A short written risk memo for any company, in the style of a forensic analyst's note.")
-    callout("<b>How the AI is kept honest:</b> every memo is built from the same numeric <i>fact sheet</i>. The AI is instructed to use <b>only</b> those numbers, to treat flags as signals not proof, "
-            "and to list benign explanations. Open <i>Fact sheet</i> below to see exactly what it was given.")
-    ykeys = sorted(yr.ticker)
-    tk2 = st.selectbox("Company", ykeys, format_func=lambda t: lab.get(t, t), key="memo_co", index=ykeys.index("PCJEWELLER.NS") if "PCJEWELLER.NS" in ykeys else 0)
-    row = yr[yr.ticker == tk2].iloc[0].copy()
-    row["score"], row["tier"] = row.score_w, row.tier_w
-    layer = st.radio("Memo source", ["Rule-based (deterministic)", "Claude-drafted (pre-generated)", "Live Claude API"], horizontal=True,
-                     help="Rule-based: fixed text rules, no AI. Claude-drafted: written by Claude from the fact sheet. Live: calls the API if a key is configured.")
-    if layer.startswith("Rule"):
-        st.markdown(M.rule_based_memo(row, peers))
-    elif layer.startswith("Claude-drafted"):
-        p = DATA / "ai_memos.json"
-        memos = json.loads(p.read_text()) if p.exists() else {}
-        if tk2 in memos:
-            st.markdown(memos[tk2]["memo"])
-            st.caption(f"⚠️ Drafted by {memos[tk2]['model']} on {memos[tk2]['date']} from the FY{memos[tk2]['fy']} fact sheet. AI-generated: verify against filings before use.")
+# ------------------------------------------------------------------------------------------ TAB: AI ANALYST
+def _mrow(r_):
+    r2 = r_.copy(); r2["score"], r2["tier"] = r_.score_w, r_.tier_w
+    return r2
+
+
+@st.cache_data
+def grounding_stats(_yr, _peers, key):
+    memos = json.loads((DATA / "ai_memos.json").read_text()) if (DATA / "ai_memos.json").exists() else {}
+    rows = []
+    for _, r_ in _yr[_yr.score_w.notna()].iterrows():
+        g = M.grounding_check(M.rule_based_memo(_mrow(r_), _peers), M.fact_sheet(_mrow(r_), _peers)); rows.append(("Rule-based memo", r_.ticker, g))
+        if r_.ticker in memos:
+            g2 = M.grounding_check(memos[r_.ticker]["memo"], M.fact_sheet(_mrow(r_), _peers)); rows.append(("Claude-drafted memo", r_.ticker, g2))
+    out = {}
+    for kind in ("Rule-based memo", "Claude-drafted memo"):
+        sel = [g for k_, _, g in rows if k_ == kind]
+        out[kind] = (len(sel), sum(g["total"] for g in sel), sum(g["grounded"] for g in sel), [(t, g["ungrounded"]) for k_, t, g in rows if k_ == kind and g["ungrounded"]])
+    return out
+
+
+with tai:
+    section("AI analyst", "AI is used in four ways here. This page shows each one, and how its reliability was checked.")
+    ai1, ai2, ai3 = st.tabs(["📝 Company memo", "🧠 Where AI is used", "✅ How reliability was checked"])
+
+    with ai1:
+        callout("<b>Guard-rails:</b> every memo is built from one numeric <i>fact sheet</i>. The AI may use <b>only</b> those numbers, must treat flags as signals not proof, and must list benign explanations. "
+                "After each memo an automatic <b>grounding check</b> confirms that every number in it traces back to the fact sheet.")
+        ykeys = sorted(yr.ticker)
+        tk2 = st.selectbox("Company", ykeys, format_func=lambda t: lab.get(t, t), key="memo_co", index=ykeys.index("PCJEWELLER.NS") if "PCJEWELLER.NS" in ykeys else 0)
+        row = _mrow(yr[yr.ticker == tk2].iloc[0])
+        facts = M.fact_sheet(row, peers)
+        layer = st.radio("Memo source", ["Rule-based (deterministic)", "Claude-drafted (pre-generated)", "Live Claude API"], horizontal=True,
+                         help="Rule-based: fixed text rules, no AI. Claude-drafted: written by Claude from the fact sheet. Live: calls the API if a key is configured.")
+        memo_txt = None
+        if layer.startswith("Rule"):
+            memo_txt = M.rule_based_memo(row, peers); st.markdown(memo_txt)
+        elif layer.startswith("Claude-drafted"):
+            p = DATA / "ai_memos.json"; memos = json.loads(p.read_text()) if p.exists() else {}
+            if tk2 in memos:
+                memo_txt = memos[tk2]["memo"]; st.markdown(memo_txt)
+                st.caption(f"⚠️ Drafted by {memos[tk2]['model']} on {memos[tk2]['date']} from the FY{memos[tk2]['fy']} fact sheet. AI-generated: verify against filings before use.")
+            else:
+                callout("No pre-generated Claude memo for this company. Memos exist for PC Jeweller, Zee, Coffee Day, Reliance Infra, Tata Motors PV, Adani Enterprises, TCS and Vodafone Idea. Use the rule-based option for others.")
         else:
-            callout("No pre-generated Claude memo for this company. Memos exist for PC Jeweller, Zee, Coffee Day, Reliance Infra, Tata Motors PV, Adani Enterprises, TCS and Vodafone Idea. Use the rule-based option for others.")
-    else:
-        if st.button("Generate with Claude"):
-            try:
-                st.markdown(M.live_claude_memo(row, peers))
-            except Exception as e:
-                st.error(f"Live call unavailable on this deployment ({e}). It needs an ANTHROPIC_API_KEY.")
-    with st.expander("Fact sheet given to the AI"):
-        st.json(M.fact_sheet(row, peers))
-    with st.expander("Prompt template"):
-        st.code(M.PROMPT)
+            if st.button("Generate with Claude"):
+                try:
+                    memo_txt = M.live_claude_memo(row, peers); st.markdown(memo_txt)
+                except Exception as e:
+                    st.error(f"Live call unavailable on this deployment ({e}). It needs an ANTHROPIC_API_KEY.")
+        if memo_txt:
+            g = M.grounding_check(memo_txt, facts)
+            if g["total"] == 0: st.caption("Grounding check: no company-specific numbers in this text.")
+            elif not g["ungrounded"]: callout(f"<b>✅ Grounding check passed:</b> all {g['total']} numbers in this memo trace back to the fact sheet (within rounding).", "good")
+            else: callout(f"<b>⚠️ Grounding check:</b> {g['grounded']} of {g['total']} numbers trace to the fact sheet. Not found: <b>{', '.join(g['ungrounded'])}</b>. Verify these before use.", "warn")
+        with st.expander("Fact sheet given to the AI (the only numbers it may use)"):
+            st.json(facts)
+        with st.expander("Prompt template"):
+            st.code(M.PROMPT)
+
+    with ai2:
+        st.markdown("""
+| AI component | What it does | Where you see it |
+|---|---|---|
+| **Anomaly detector** (Isolation Forest, unsupervised machine learning) | Looks at a company's whole financial fingerprint (14 forensic features) and scores how unusual it is against peers, with **no hand-set weights**. Also names the two features that make it unusual. | Priority index, Triage board, alerts |
+| **Alert engine** | Compares each company with last year and raises alerts: risk-score jumps, Beneish threshold crossings, new distress, falling cash conversion, AI outliers. | Decision desk |
+| **Closest financial twins** (nearest-neighbour matching) | Finds the companies whose fingerprint is most similar, for like-for-like comparison. | Company brief |
+| **LLM memo writer** (Claude) | Turns the fact sheet into a short analyst memo with benign explanations and next audit steps. | Company memo |
+| **AI-assisted build** (Claude Code) | Wrote the data pipeline, tests and this dashboard under human direction. | Whole product |
+""")
+        section("The new metric: Forensic Priority Index (FPI)", "Combines what the rules say, how many tests agree, and what the AI detector says.")
+        st.markdown("**FPI = 50% × Risk score + 25% × share of tests in the red zone + 25% × AI anomaly percentile**  (each 0 to 100).")
+        st.caption("Why three parts? The risk score is a weighted judgement. Corroboration rewards firms where *independent* tests agree. The anomaly percentile is a second opinion that does not depend on any hand-chosen weights.")
+        sc2 = yr[yr.score_w.notna() & yr.anomaly_pct.notna()].copy()
+        f = px.scatter(sc2, x="score_w", y="anomaly_pct", color="cohort", color_discrete_map=COH_COL, hover_name="name",
+                       labels={"score_w": "Rule-based risk score", "anomaly_pct": "AI anomaly percentile", "cohort": "Cohort"})
+        f.add_vline(x=65, line_dash="dash", line_color=MUTED, annotation_text="High tier", annotation_position="top left")
+        f.add_hline(y=90, line_dash="dash", line_color=MUTED, annotation_text="AI outlier", annotation_position="bottom right")
+        f.update_traces(marker=dict(size=10, line=dict(color="white", width=1.5)))
+        f.update_layout(title="Where AI and the rules agree and disagree")
+        st.plotly_chart(style(f, 400), width="stretch", config=PCFG)
+        dis2 = sc2[(sc2.anomaly_pct >= 90) & (sc2.score_w < 65)]
+        st.caption("**How to read:** top-right = both agree the firm is unusual and risky. **Top-left** = unusual patterns the rules rate lower (a second look is worthwhile): "
+                   + (", ".join(snm(n) for n in dis2.name) if len(dis2) else "none this year") + ". Bottom-right = rules flag it, AI sees nothing unusual.")
+        with st.expander("Significant prompts and workflow (how AI was used to build this)"):
+            st.markdown("""
+| Step | What the AI was asked to do | How a human checked it |
+|---|---|---|
+| 1. Scope | Propose the stakeholder, universe, data sources; ask clarifying questions | Chose forensic analyst, Nifty 50 plus watchlist, free live sources |
+| 2. Build engine | Implement Beneish, accruals, REM, Benford, Altman and a composite score | First run ranked a finance company as the riskiest; the human caught that financials must be excluded, and the rule was added |
+| 3. Cross-check data | Re-fetch every firm from a second online source and compare | Found Yahoo reports two firms in USD; fixed currency handling |
+| 4. Add AI layer | Add an unsupervised anomaly detector, alerts and nearest-neighbour peers | Replaced misleading features (debt/equity with negative equity) after inspecting the explanations |
+| 5. Memos | Draft memos from a fact sheet with a strict "only these numbers" prompt | Automatic grounding check plus a rule-based baseline |
+| 6. Test | Back-test the score and the new index against the watchlist | Reported modest results honestly, with the small-sample caveat |
+""")
+
+    with ai3:
+        gs = grounding_stats(yr, peers, (fy, stamp(), tuple(W.values())))
+        section("Check 1 · Every number in an AI memo is traceable", "An automatic test run on every memo in this dashboard.")
+        c1, c2 = st.columns(2)
+        for col_, kind in [(c1, "Rule-based memo"), (c2, "Claude-drafted memo")]:
+            n_, tot_, good_, bad_ = gs[kind]
+            col_.metric(kind + "s", f"{good_} of {tot_} numbers traced", f"{(good_ / tot_ * 100 if tot_ else 100):.0f}% grounded · {n_} memos", delta_color="off")
+        bad_all = gs["Claude-drafted memo"][3] + gs["Rule-based memo"][3]
+        if bad_all: st.caption("Not traced: " + "; ".join(f"{t.replace('.NS', '')}: {', '.join(b)}" for t, b in bad_all[:6]) + ". Thresholds and model weights are treated as method constants, not company facts.")
+        else: st.caption("No ungrounded numbers. Thresholds and model weights are treated as method constants, not company facts.")
+        section("Check 2 · The input data agrees with an independent source", "Yahoo Finance versus Screener.in, same companies.")
+        xr_ = DATA / "xcheck_ratios.csv"
+        if xr_.exists():
+            xv = pd.read_csv(xr_); st.markdown(f"Cash flow and total assets match almost exactly; the five ratios behind the tests rank-correlate **{xv.spearman.min():.2f} to {xv.spearman.max():.2f}** across sources (see *Method & data*).")
+        section("Check 3 · The scores are back-tested", "Does each measure rank the watchlist of troubled firms above the Nifty 50? (AUC, 0.5 = coin flip)")
+        vv = valid.set_index("metric").AUC
+        st.markdown(f"Rule-based composite **{vv.get('Composite score', float('nan')):.2f}** · AI anomaly detector **{vv.get('AI anomaly detector (Isolation Forest)', float('nan')):.2f}** · Priority index **{vv.get('Forensic Priority Index (new)', float('nan')):.2f}**.")
+        callout("<b>Read honestly:</b> only about 10 watchlist firms can be scored, so these AUCs are indicative. The anomaly detector scores highest partly because troubled firms are often structurally unusual (distress, restructuring), "
+                "which is not the same as manipulation. That is why the priority index blends all three views instead of trusting any one.", "warn")
+        section("Check 4 · Human review and disclosure", "What stays with the analyst.")
+        st.markdown("- Every AI memo is labelled AI-generated and must list **benign explanations** before suggesting audit steps.\n- A rule-based memo (no AI) is always available as a baseline to compare with.\n"
+                    "- Written text from the language model never influences a ranking. Ranking uses only the calculated score and index (the index includes the machine-learning anomaly percentile, which is a calculation, not generated text).\n- The analyst confirms any flag against filings before acting. A flag is a reason to look, never evidence of wrongdoing.")
 
 # ------------------------------------------------------------------------------------------ TAB 5
-with t5:
-    section("Method & validation", "How the score is built, how well it works, and where it can mislead.")
+with tmeth:
+    section("Method & data", "How the score and the priority index are built, how well they work, where the data comes from, and where it can mislead.")
     st.markdown("""
 | Block | Default weight | Tool | Red-flag rule |
 |---|---|---|---|
@@ -742,14 +973,19 @@ with t5:
 
 Tiers: **Low** below 35 · **Moderate** 35-50 · **Elevated** 50-65 · **High** above 65. Weights are adjustable in the sidebar.
 """)
+    section("The Forensic Priority Index (FPI)", "The new decision metric: it ranks companies for investigation.")
+    st.markdown("**FPI = 50% × Risk score + 25% × share of tests in the red zone + 25% × AI anomaly percentile.** Risk score = weighted average of six tests. Red zone = a test scores 60 or more out of 100. "
+                "AI anomaly percentile = how unusual the company's whole fingerprint is versus peers (Isolation Forest).")
+    st.markdown("**Recommended action (bands on the index):** 65 or more = Investigate · 50 to 65 = Review · 35 to 50 = Monitor · below 35 = Routine.")
     section("Back-test: does the screen rank the watchlist above the Nifty 50?", "AUC = chance that a random watchlist firm scores higher than a random Nifty firm. 0.5 = coin flip, 1.0 = perfect.")
     v = valid.copy(); v["AUC"] = v.AUC.round(2)
     f = px.bar(v.sort_values("AUC"), x="AUC", y="metric", orientation="h", color_discrete_sequence=[BLUE], text="AUC", labels={"metric": ""})
     f.add_vline(x=0.5, line_dash="dash", line_color=MUTED, annotation_text="0.5 = coin-flip")
     f.update_layout(title="Back-test result by test", xaxis=dict(range=[0, 1]))
     st.plotly_chart(style(f, 340), width="stretch", config=PCFG)
-    callout("<b>Honest reading:</b> the combined score beats a coin flip (about 0.65) but not by a lot, using only ~10 watchlist firms. Several watchlist episodes were distress or governance issues, "
-            "not accounting manipulation. Treat the screen as a prioritisation aid, not a detector.", "warn")
+    vm_ = valid.set_index("metric").AUC
+    callout(f"<b>Honest reading:</b> the rule-based composite scores {vm_.get('Composite score', float('nan')):.2f}, the AI anomaly detector {vm_.get('AI anomaly detector (Isolation Forest)', float('nan')):.2f} and the priority index {vm_.get('Forensic Priority Index (new)', float('nan')):.2f} (0.5 = coin flip). "
+            "Only about 10 watchlist firms can be scored, and several of their episodes were distress or governance issues, not accounting manipulation; anomaly detection also rewards structural oddness. Treat the screen as a prioritisation aid, not a detector.", "warn")
     with st.expander("Back-test details"):
         st.dataframe(v.round(3), hide_index=True, width="stretch")
     xl, xr = DATA / "xcheck_levels.csv", DATA / "xcheck_ratios.csv"
@@ -760,6 +996,20 @@ Tiers: **Low** below 35 · **Moderate** 35-50 · **Elevated** 50-65 · **High** 
         c2.markdown("**Screen inputs: rank agreement between sources (FY2026)**"); c2.dataframe(pd.read_csv(xr), hide_index=True, width="stretch")
         callout("Cash flow and total assets match almost exactly, and the ratios the screen relies on correlate 0.98-1.00 across sources. Sales gaps above 10% occur only for financial firms "
                 "(revenue is defined differently) and Infosys (Yahoo reports it in USD). Caveat: both sites draw on the same company filings, so this shows consistent transcription, not that the filings are accurate.", "good")
+    @st.cache_data
+    def audit_zip(_k):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            for f_ in ["DATA_DICTIONARY.md", "universe.csv", "raw_long.csv", "metrics_year.csv", "scores.csv", "benford_digits.csv", "screener_long.csv", "xcheck_levels.csv", "xcheck_ratios.csv", "xcheck_firms.csv", "validation.csv", "ai_memos.json", "last_refresh.txt"]:
+                if (DATA / f_).exists(): z.write(DATA / f_, arcname="audit_pack/" + f_)
+        return buf.getvalue()
+
+    section("Data & calculation audit pack", "Everything needed to verify the source of every number and re-run every calculation.")
+    st.download_button("⬇ Download the audit pack (zip)", audit_zip(stamp()), "forensic_screener_audit_pack.zip", mime="application/zip")
+    st.caption("Contains the raw statements, every intermediate calculation (one row per company-year), the Screener.in history, the cross-check results, the AI memos, and a dictionary with all formulas. "
+               "The *Company brief* tab also shows the Beneish M-score recalculated step by step for any company.")
+    if (DATA / "DATA_DICTIONARY.md").exists():
+        with st.expander("Data dictionary and formulas"): st.markdown((DATA / "DATA_DICTIONARY.md").read_text())
     section("Sources & references", "Where the data and methods come from.")
     st.markdown("""**Data**
 - NSE India: current Nifty 50 constituents (archives.nseindia.com).
@@ -786,4 +1036,4 @@ Tiers: **Low** below 35 · **Moderate** 35-50 · **Elevated** 50-65 · **High** 
 - Related-party and cash-misappropriation frauds (Wirecard-type) are mostly invisible to ratio screens; they need cash confirmations and document review.
 - Banks, NBFCs and insurers are not scored.""")
 
-st.markdown('<div class="foot">Data: NSE India, Yahoo Finance, Screener.in. Methods and references: see Method &amp; validation, Sources &amp; references. For analyst review: screening signals only, not investment advice and not evidence of wrongdoing.</div>', unsafe_allow_html=True)
+st.markdown('<div class="foot">Data: NSE India, Yahoo Finance, Screener.in. Methods and references: see Method &amp; data, Sources &amp; references. For analyst review: screening signals only, not investment advice and not evidence of wrongdoing.</div>', unsafe_allow_html=True)

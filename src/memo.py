@@ -54,7 +54,10 @@ def fact_sheet(row: pd.Series, peers: pd.DataFrame) -> dict:
          "benford_mad": None if pd.isna(row.get("benford_mad")) else round(float(row["benford_mad"]), 4),
          "benford_verdict": None if pd.isna(row.get("benford_label")) else row["benford_label"],
          "benford_n_numbers": None if pd.isna(row.get("benford_n")) else int(row["benford_n"]),
-         "data_coverage_pct_of_model": None if pd.isna(row.get("coverage")) else int(row["coverage"])}
+         "data_coverage_pct_of_model": None if pd.isna(row.get("coverage")) else int(row["coverage"]),
+         "tests_in_red_zone": None if pd.isna(row.get("red_n")) else f"{int(row['red_n'])} of {int(row['red_of'])}",
+         "anomaly_percentile_vs_peers": None if pd.isna(row.get("anomaly_pct")) else round(float(row["anomaly_pct"])),
+         "anomaly_drivers": row.get("anomaly_drivers") if isinstance(row.get("anomaly_drivers"), str) and row.get("anomaly_drivers") else None}
     return f
 
 
@@ -111,3 +114,43 @@ def live_claude_memo(row: pd.Series, peers: pd.DataFrame, model="claude-sonnet-5
         model=model, max_tokens=700,
         messages=[{"role": "user", "content": PROMPT.format(facts=json.dumps(fact_sheet(row, peers), indent=1))}])
     return msg.content[0].text
+
+
+# ----------------------------------------------------------------------------- reliability: number-grounding check
+import re as _re
+RULE_CONSTANTS = {-1.78, -2.22, 0.015, 0.012, 0.006, 4.15, 5.85, 0.8, 0.6, 1.0, 1.2, 1.3, 1.5, 0.05, 0.1, 100.0, 50.0, 35.0, 65.0, 10.0, 15.0, 20.0, 30.0}  # thresholds and model weights are method constants, not company facts
+
+
+def _flatten(x, out):
+    if isinstance(x, dict):
+        for v in x.values(): _flatten(v, out)
+    elif isinstance(x, (list, tuple)):
+        for v in x: _flatten(v, out)
+    elif isinstance(x, bool): pass
+    elif isinstance(x, (int, float)) and not pd.isna(x): out.append(float(x))
+    elif isinstance(x, str):
+        for m in _re.finditer(r"\d+(?:\.\d+)?", x): out.append(float(m.group(0)))
+
+
+def grounding_check(text, facts):
+    """Every company-specific number in an AI memo must be traceable to the fact sheet (within rounding).
+    Returns dict(total, grounded, ungrounded list). Method constants (thresholds) and years/list markers are ignored."""
+    allowed = []; _flatten(facts, allowed)
+    pct_like = [a for a in allowed if 0 <= a <= 100]
+    derived = [100 - a for a in pct_like] + [abs(a) for a in allowed]                    # "top 12%" from an 88th percentile; sign flips
+    pool = allowed + derived + list(RULE_CONSTANTS) + [-c for c in RULE_CONSTANTS]
+    t = text
+    t = _re.sub(r"FY\s?\d{2,4}(?:\s?[-–]\s?(?:FY)?\d{2,4})?", " ", t)             # fiscal years
+    t = _re.sub(r"\b(?:19|20)\d{2}\b", " ", t)                                        # calendar years
+    t = _re.sub(r"\(\d\)", " ", t); t = _re.sub(r"(?m)^\s*\d+[.)]\s", " ", t)         # list markers
+    t = _re.sub(r"\b\d+-year\b", " ", t); t = _re.sub(r"\b(?:one|two|three)\b", " ", t)
+    toks = _re.findall(r"(?<![\w.])[-−]?\d+(?:,\d{3})*(?:\.\d+)?", t)
+    bad, good = [], 0
+    for tok in toks:
+        v = float(tok.replace("−", "-").replace(",", ""))
+        dec = len(tok.split(".")[1]) if "." in tok else 0
+        tol = 0.5 * 10 ** (-dec) + 1e-9
+        ok = any(abs(a - v) <= tol or abs(round(a, dec) - v) <= 1e-9 for a in pool)
+        if ok: good += 1
+        else: bad.append(tok)
+    return dict(total=len(toks), grounded=good, ungrounded=bad)

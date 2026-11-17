@@ -1,63 +1,63 @@
-ticker,name,sector,industry,cohort,note,currency
-ADANIENT.NS,Adani Enterprises Limited,Energy,Thermal Coal,Nifty 50,,INR
-ADANIPORTS.NS,Adani Ports and Special Economic Zone Limited,Industrials,Marine Shipping,Nifty 50,,INR
-APOLLOHOSP.NS,Apollo Hospitals Enterprise Limited,Healthcare,Medical Care Facilities,Nifty 50,,INR
-ASIANPAINT.NS,Asian Paints Limited,Basic Materials,Specialty Chemicals,Nifty 50,,INR
-AXISBANK.NS,Axis Bank Limited,Financial Services,Banks - Regional,Nifty 50,,INR
-BSE.NS,BSE Limited,Financial Services,Financial Data & Stock Exchanges,Nifty 50,,INR
-BAJAJ-AUTO.NS,Bajaj Auto Limited,Consumer Cyclical,Auto Manufacturers,Nifty 50,,INR
-BAJFINANCE.NS,Bajaj Finance Limited,Financial Services,Credit Services,Nifty 50,,INR
-BAJAJFINSV.NS,Bajaj Finserv Ltd.,Financial Services,Financial Conglomerates,Nifty 50,,INR
-BEL.NS,Bharat Electronics Limited,Industrials,Aerospace & Defense,Nifty 50,,INR
-BHARTIARTL.NS,Bharti Airtel Limited,Communication Services,Telecom Services,Nifty 50,,INR
-CIPLA.NS,Cipla Limited,Healthcare,Drug Manufacturers - Specialty & Generic,Nifty 50,,INR
-COALINDIA.NS,Coal India Limited,Energy,Thermal Coal,Nifty 50,,INR
-DRREDDY.NS,Dr. Reddy's Laboratories Limited,Healthcare,Drug Manufacturers - Specialty & Generic,Nifty 50,,INR
-EICHERMOT.NS,Eicher Motors Limited,Consumer Cyclical,Auto Manufacturers,Nifty 50,,INR
-ETERNAL.NS,Eternal Limited,Consumer Cyclical,Internet Retail,Nifty 50,,INR
-GRASIM.NS,Grasim Industries Limited,Basic Materials,Building Materials,Nifty 50,,INR
-HCLTECH.NS,HCL Technologies Limited,Technology,Information Technology Services,Nifty 50,,USD
-HDFCBANK.NS,HDFC Bank Limited,Financial Services,Banks - Regional,Nifty 50,,INR
-HDFCLIFE.NS,HDFC Life Insurance Company Limited,Financial Services,Insurance - Life,Nifty 50,,INR
-HINDALCO.NS,Hindalco Industries Limited,Basic Materials,Aluminum,Nifty 50,,INR
-HINDUNILVR.NS,Hindustan Unilever Limited,Consumer Defensive,Household & Personal Products,Nifty 50,,INR
-ICICIBANK.NS,ICICI Bank Limited,Financial Services,Banks - Regional,Nifty 50,,INR
-ITC.NS,ITC Limited,Consumer Defensive,Tobacco,Nifty 50,,INR
-INFY.NS,Infosys Limited,Technology,Information Technology Services,Nifty 50,,USD
-INDIGO.NS,InterGlobe Aviation Limited,Industrials,Airlines,Nifty 50,,INR
-JSWSTEEL.NS,JSW Steel Limited,Basic Materials,Steel,Nifty 50,,INR
-JIOFIN.NS,Jio Financial Services Limited,Financial Services,Asset Management,Nifty 50,,INR
-KOTAKBANK.NS,Kotak Mahindra Bank Limited,Financial Services,Banks - Regional,Nifty 50,,INR
-LT.NS,Larsen & Toubro Limited,Industrials,Engineering & Construction,Nifty 50,,INR
-M&M.NS,Mahindra & Mahindra Limited,Consumer Cyclical,Auto Manufacturers,Nifty 50,,INR
-MARUTI.NS,Maruti Suzuki India Limited,Consumer Cyclical,Auto Manufacturers,Nifty 50,,INR
-MAXHEALTH.NS,Max Healthcare Institute Limited,Healthcare,Medical Care Facilities,Nifty 50,,INR
-NTPC.NS,NTPC Limited,Utilities,Utilities - Regulated Electric,Nifty 50,,INR
-NESTLEIND.NS,Nestlé India Limited,Consumer Defensive,Packaged Foods,Nifty 50,,INR
-ONGC.NS,Oil and Natural Gas Corporation Limited,Energy,Oil & Gas Integrated,Nifty 50,,INR
-POWERGRID.NS,Power Grid Corporation of India Limited,Utilities,Utilities - Regulated Electric,Nifty 50,,INR
-RELIANCE.NS,Reliance Industries Limited,Energy,Oil & Gas Refining & Marketing,Nifty 50,,INR
-SBILIFE.NS,SBI Life Insurance Company Limited,Financial Services,Insurance - Life,Nifty 50,,INR
-SHRIRAMFIN.NS,Shriram Finance Limited,Financial Services,Credit Services,Nifty 50,,INR
-SBIN.NS,State Bank of India,Financial Services,Banks - Regional,Nifty 50,,INR
-SUNPHARMA.NS,Sun Pharmaceutical Industries Limited,Healthcare,Drug Manufacturers - Specialty & Generic,Nifty 50,,INR
-TCS.NS,Tata Consultancy Services Limited,Technology,Information Technology Services,Nifty 50,,INR
-TATACONSUM.NS,Tata Consumer Products Limited,Consumer Defensive,Packaged Foods,Nifty 50,,INR
-TMPV.NS,Tata Motors Passenger Vehicles Limited,Consumer Cyclical,Auto Manufacturers,Nifty 50,,INR
-TATASTEEL.NS,Tata Steel Limited,Basic Materials,Steel,Nifty 50,,INR
-TECHM.NS,Tech Mahindra Limited,Technology,Information Technology Services,Nifty 50,,INR
-TITAN.NS,Titan Company Limited,Consumer Cyclical,Luxury Goods,Nifty 50,,INR
-TRENT.NS,Trent Limited,Consumer Cyclical,Apparel Retail,Nifty 50,,INR
-ULTRACEMCO.NS,UltraTech Cement Limited,Basic Materials,Building Materials,Nifty 50,,INR
-ZEEL.NS,Zee Entertainment Enterprises Limited,Communication Services,Broadcasting,Watchlist,Zee Entertainment - course case (Zee),INR
-COFFEEDAY.NS,Coffee Day Enterprises Limited,Consumer Cyclical,Restaurants,Watchlist,Coffee Day Enterprises - course case (CCD),INR
-RELINFRA.NS,Reliance Infrastructure Limited,Utilities,Utilities - Independent Power Producers,Watchlist,Reliance Infrastructure - course case (Reliance Group red flags),INR
-YESBANK.NS,Yes Bank Limited,Financial Services,Banks - Regional,Watchlist,Yes Bank - 2020 reconstruction,INR
-IDEA.NS,Vodafone Idea Limited,Communication Services,Telecom Services,Watchlist,Vodafone Idea - severe leverage / distress,INR
-RPOWER.NS,Reliance Power Limited,Utilities,Utilities - Independent Power Producers,Watchlist,Reliance Power - group distress,INR
-RCOM.NS,Reliance Communications Limited,Communication Services,Telecom Services,Watchlist,Reliance Communications - insolvency,INR
-SUZLON.NS,Suzlon Energy Limited,Industrials,Specialty Industrial Machinery,Watchlist,Suzlon Energy - debt restructuring history,INR
-GTLINFRA.NS,GTL Infrastructure Limited,Technology,Communication Equipment,Watchlist,GTL Infrastructure - high leverage,INR
-PCJEWELLER.NS,PC Jeweller Limited,Consumer Cyclical,Luxury Goods,Watchlist,PC Jeweller - governance / lender issues,INR
-UNITECH.NS,Unitech Limited,Real Estate,Real Estate - Diversified,Watchlist,Unitech - governance / insolvency,INR
-RHFL.NS,Reliance Home Finance Limited,Financial Services,Mortgage Finance,Watchlist,Reliance Home Finance - distress,INR
+ticker,name,sector,industry,currency,cohort,note
+ADANIENT.NS,Adani Enterprises Limited,Energy,Thermal Coal,INR,Nifty 50,
+ADANIPORTS.NS,Adani Ports and Special Economic Zone Limited,Industrials,Marine Shipping,INR,Nifty 50,
+APOLLOHOSP.NS,Apollo Hospitals Enterprise Limited,Healthcare,Medical Care Facilities,INR,Nifty 50,
+ASIANPAINT.NS,Asian Paints Limited,Basic Materials,Specialty Chemicals,INR,Nifty 50,
+AXISBANK.NS,Axis Bank Limited,Financial Services,Banks - Regional,INR,Nifty 50,
+BSE.NS,BSE Limited,Financial Services,Financial Data & Stock Exchanges,INR,Nifty 50,
+BAJAJ-AUTO.NS,Bajaj Auto Limited,Consumer Cyclical,Auto Manufacturers,INR,Nifty 50,
+BAJFINANCE.NS,Bajaj Finance Limited,Financial Services,Credit Services,INR,Nifty 50,
+BAJAJFINSV.NS,Bajaj Finserv Ltd.,Financial Services,Financial Conglomerates,INR,Nifty 50,
+BEL.NS,Bharat Electronics Limited,Industrials,Aerospace & Defense,INR,Nifty 50,
+BHARTIARTL.NS,Bharti Airtel Limited,Communication Services,Telecom Services,INR,Nifty 50,
+CIPLA.NS,Cipla Limited,Healthcare,Drug Manufacturers - Specialty & Generic,INR,Nifty 50,
+COALINDIA.NS,Coal India Limited,Energy,Thermal Coal,INR,Nifty 50,
+DRREDDY.NS,Dr. Reddy's Laboratories Limited,Healthcare,Drug Manufacturers - Specialty & Generic,INR,Nifty 50,
+EICHERMOT.NS,Eicher Motors Limited,Consumer Cyclical,Auto Manufacturers,INR,Nifty 50,
+ETERNAL.NS,Eternal Limited,Consumer Cyclical,Internet Retail,INR,Nifty 50,
+GRASIM.NS,Grasim Industries Limited,Basic Materials,Building Materials,INR,Nifty 50,
+HCLTECH.NS,HCL Technologies Limited,Technology,Information Technology Services,USD,Nifty 50,
+HDFCBANK.NS,HDFC Bank Limited,Financial Services,Banks - Regional,INR,Nifty 50,
+HDFCLIFE.NS,HDFC Life Insurance Company Limited,Financial Services,Insurance - Life,INR,Nifty 50,
+HINDALCO.NS,Hindalco Industries Limited,Basic Materials,Aluminum,INR,Nifty 50,
+HINDUNILVR.NS,Hindustan Unilever Limited,Consumer Defensive,Household & Personal Products,INR,Nifty 50,
+ICICIBANK.NS,ICICI Bank Limited,Financial Services,Banks - Regional,INR,Nifty 50,
+ITC.NS,ITC Limited,Consumer Defensive,Tobacco,INR,Nifty 50,
+INFY.NS,Infosys Limited,Technology,Information Technology Services,USD,Nifty 50,
+INDIGO.NS,InterGlobe Aviation Limited,Industrials,Airlines,INR,Nifty 50,
+JSWSTEEL.NS,JSW Steel Limited,Basic Materials,Steel,INR,Nifty 50,
+JIOFIN.NS,Jio Financial Services Limited,Financial Services,Asset Management,INR,Nifty 50,
+KOTAKBANK.NS,Kotak Mahindra Bank Limited,Financial Services,Banks - Regional,INR,Nifty 50,
+LT.NS,Larsen & Toubro Limited,Industrials,Engineering & Construction,INR,Nifty 50,
+M&M.NS,Mahindra & Mahindra Limited,Consumer Cyclical,Auto Manufacturers,INR,Nifty 50,
+MARUTI.NS,Maruti Suzuki India Limited,Consumer Cyclical,Auto Manufacturers,INR,Nifty 50,
+MAXHEALTH.NS,Max Healthcare Institute Limited,Healthcare,Medical Care Facilities,INR,Nifty 50,
+NTPC.NS,NTPC Limited,Utilities,Utilities - Regulated Electric,INR,Nifty 50,
+NESTLEIND.NS,Nestlé India Limited,Consumer Defensive,Packaged Foods,INR,Nifty 50,
+ONGC.NS,Oil and Natural Gas Corporation Limited,Energy,Oil & Gas Integrated,INR,Nifty 50,
+POWERGRID.NS,Power Grid Corporation of India Limited,Utilities,Utilities - Regulated Electric,INR,Nifty 50,
+RELIANCE.NS,Reliance Industries Limited,Energy,Oil & Gas Refining & Marketing,INR,Nifty 50,
+SBILIFE.NS,SBI Life Insurance Company Limited,Financial Services,Insurance - Life,INR,Nifty 50,
+SHRIRAMFIN.NS,Shriram Finance Limited,Financial Services,Credit Services,INR,Nifty 50,
+SBIN.NS,State Bank of India,Financial Services,Banks - Regional,INR,Nifty 50,
+SUNPHARMA.NS,Sun Pharmaceutical Industries Limited,Healthcare,Drug Manufacturers - Specialty & Generic,INR,Nifty 50,
+TCS.NS,Tata Consultancy Services Limited,Technology,Information Technology Services,INR,Nifty 50,
+TATACONSUM.NS,Tata Consumer Products Limited,Consumer Defensive,Packaged Foods,INR,Nifty 50,
+TMPV.NS,Tata Motors Passenger Vehicles Limited,Consumer Cyclical,Auto Manufacturers,INR,Nifty 50,
+TATASTEEL.NS,Tata Steel Limited,Basic Materials,Steel,INR,Nifty 50,
+TECHM.NS,Tech Mahindra Limited,Technology,Information Technology Services,INR,Nifty 50,
+TITAN.NS,Titan Company Limited,Consumer Cyclical,Luxury Goods,INR,Nifty 50,
+TRENT.NS,Trent Limited,Consumer Cyclical,Apparel Retail,INR,Nifty 50,
+ULTRACEMCO.NS,UltraTech Cement Limited,Basic Materials,Building Materials,INR,Nifty 50,
+ZEEL.NS,Zee Entertainment Enterprises Limited,Communication Services,Broadcasting,INR,Watchlist,Zee Entertainment - course case (Zee)
+COFFEEDAY.NS,Coffee Day Enterprises Limited,Consumer Cyclical,Restaurants,INR,Watchlist,Coffee Day Enterprises - course case (CCD)
+RELINFRA.NS,Reliance Infrastructure Limited,Utilities,Utilities - Independent Power Producers,INR,Watchlist,Reliance Infrastructure - course case (Reliance Group red flags)
+YESBANK.NS,Yes Bank Limited,Financial Services,Banks - Regional,INR,Watchlist,Yes Bank - 2020 reconstruction
+IDEA.NS,Vodafone Idea Limited,Communication Services,Telecom Services,INR,Watchlist,Vodafone Idea - severe leverage / distress
+RPOWER.NS,Reliance Power Limited,Utilities,Utilities - Independent Power Producers,INR,Watchlist,Reliance Power - group distress
+RCOM.NS,Reliance Communications Limited,Communication Services,Telecom Services,INR,Watchlist,Reliance Communications - insolvency
+SUZLON.NS,Suzlon Energy Limited,Industrials,Specialty Industrial Machinery,INR,Watchlist,Suzlon Energy - debt restructuring history
+GTLINFRA.NS,GTL Infrastructure Limited,Technology,Communication Equipment,INR,Watchlist,GTL Infrastructure - high leverage
+PCJEWELLER.NS,PC Jeweller Limited,Consumer Cyclical,Luxury Goods,INR,Watchlist,PC Jeweller - governance / lender issues
+UNITECH.NS,Unitech Limited,Real Estate,Real Estate - Diversified,INR,Watchlist,Unitech - governance / insolvency
+RHFL.NS,Reliance Home Finance Limited,Financial Services,Mortgage Finance,INR,Watchlist,Reliance Home Finance - distress
